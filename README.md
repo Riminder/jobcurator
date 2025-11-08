@@ -1,5 +1,5 @@
 <div style="width:260px; height:100px; overflow:hidden; border-radius:8px;">
-  <img src="./logo-dark.png"
+  <img src="./logo.png"
        style="width:100%; height:auto; object-fit:cover; object-position:center 50%;" />
 </div>
 
