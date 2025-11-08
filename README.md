@@ -1,12 +1,13 @@
 # jobcurator
 Open source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
 
-Available features:
+### Available features:
 - Hash-based job deduplication and compression with diversity preservation
 
-TODO
+### TODO
 - Job Parsing
 - Taxonomy Normalization 
+
 
 ## Repository structure
 ```yaml
@@ -20,6 +21,25 @@ jobcurator/
       ├─ hash_utils.py
       └─ curator.py
 ```
+
+## Package installation via Pypi
+```bash
+pip install jobcurator
+```
+
+## Package installation via GitHub
+1. Clone the repo
+```bash
+git clone https://github.com/riminder/jobcurator
+```
+2. Once this is in your repo:
+```bash
+cd jobcurator
+pip install .
+# or, for dev
+pip install -e .
+```
+
 
 ## Code example
 
