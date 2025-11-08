@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jobcurator"
 version = "0.1.0"
-description = "Hash-based job deduplication and compression with diversity preservation"
+description = "Open-source Machine Learning Library for Job Data"
 authors = [
   { name = "Mouhidine SEIV", email = "mouhidine.seiv@hrflow.ai" }
 ]
@@ -14,6 +14,9 @@ requires-python = ">=3.8"
 license = { text = "MIT" }
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
   "License :: OSI Approved :: MIT License",
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Libraries",
@@ -21,3 +24,10 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/riminder/jobcurator"
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
