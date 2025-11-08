@@ -2,11 +2,12 @@
   <img src="./logo.png"
        style="width:100%; height:auto; object-fit:cover; object-position:center 50%;" />
 </div>
- `
+
+
 # ℹ️` Welcome to jobcurator library
 `jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
 
-### Available features:
+### ✨ Available features:
 - Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
 `jobcurator` takes a list of structured job objects and:
   - Deduplicates using **hashing** (exact hash + SimHash + LSH)
@@ -16,11 +17,18 @@
 
 No dense embeddings. Fully hashing + simple geometry (3D coordinates for cities).
 
-### TODO
+### 📋 TODO
 - publish package to PyPI:
 - add Job Parsing
 - add Job dynamic Tagging with Taxonomy
 - add job auto-formating & Normalization
+
+## 📬 Contact
+
+For questions, ideas, or coordination around larger changes:
+
+**Primary maintainer**
+📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
 
 ---
 
@@ -39,6 +47,8 @@ jobcurator/
       ├─ hash_utils.py
       └─ curator.py
 ```
+
+---
 
 ## 🚀 Installation
 To install for local Dev:
@@ -392,13 +402,3 @@ When changing their behavior or signatures:
 PRs that are **small, focused, and well-tested** are more likely to be reviewed and merged quickly.
 
 ---
-
-## 📬 Contact
-
-For questions, ideas, or coordination around larger changes:
-
-**Primary maintainer**
-📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
-
-
-
