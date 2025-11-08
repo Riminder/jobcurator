@@ -28,6 +28,8 @@ No dense embeddings. Fully hashing + simple geometry (3D coordinates for cities)
 ```yaml
 jobcurator/
 ├─ pyproject.toml
+├─ setup.py
+├─ logo.png
 ├─ README.md
 └─ src/
    └─ jobcurator/
