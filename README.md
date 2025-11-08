@@ -4,7 +4,7 @@
 </div>
 
 
-# ℹ️` Welcome to jobcurator library
+# ℹ️ Welcome to the `jobcurator` library
 `jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
 
 ### ✨ Available features:
