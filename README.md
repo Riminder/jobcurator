@@ -30,7 +30,7 @@ pip install jobcurator
 ## Package installation via GitHub
 1. Clone the repo
 ```bash
-git clone https://github.com/riminder/jobcurator
+git clone https://github.com/Riminder/jobcurator.git
 ```
 2. Once this is in your repo:
 ```bash
