@@ -98,7 +98,6 @@ jobs = [
         source="direct",
         created_at=datetime.utcnow(),
     ),
-    # ... more jobs
 ]
 
 curator = JobCurator(
