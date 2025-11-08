@@ -1,5 +1,12 @@
 # jobcurator
-Open source Machine Learning library to clean, normalize, structure, compress and sample large datasets &amp; feeds of job offers.
+Open source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
+
+Available features:
+- Hash-based job deduplication and compression with diversity preservation
+
+TODO
+- Job Parsing
+- Taxonomy Normalization 
 
 ## Repository structure
 <code>
