@@ -70,9 +70,9 @@ pip install jobcurator
 ## 🧪 Testing code
 Run main folder run test.py
 ```bash
-python test.py                   # n_jobs=10 (capped to len(jobs)), ratio=0.5
-python test.py --n-jobs 5        # n_jobs=5, ratio=0.5
-python test.py --n-jobs 5 --ratio 0.3
+python3 test.py                   # n_jobs=10 (capped to len(jobs)), ratio=0.5
+python3 test.py --n-jobs 5        # n_jobs=5, ratio=0.5
+python3 test.py --n-jobs 5 --ratio 0.3
 ```
 
 ---
