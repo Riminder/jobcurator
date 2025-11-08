@@ -2,9 +2,9 @@
   <img src="./logo.png"
        style="width:100%; height:auto; object-fit:cover; object-position:center 50%;" />
 </div>
-
-# jobcurator
-Open source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
+ `
+# ℹ️` Welcome to jobcurator library
+`jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
 
 ### Available features:
 - Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
@@ -12,7 +12,7 @@ Open source Machine Learning library to clean, normalize, structure, compress, a
   - Deduplicates using **hashing** (exact hash + SimHash + LSH)
   - Scores jobs by **length & completion** (and optional freshness/source)
   - Preserves **variance** by keeping jobs that are **far apart** in hash space
-  - Respects a global **compression ratio** (e.g. keep 40% of jobs)
+  - Respects a global **compression ratio** (e.g., keep 40% of jobs)
 
 No dense embeddings. Fully hashing + simple geometry (3D coordinates for cities).
 
@@ -24,11 +24,12 @@ No dense embeddings. Fully hashing + simple geometry (3D coordinates for cities)
 
 ---
 
-## Repository structure
+## 🗂️ Repository structure
 ```yaml
 jobcurator/
 ├─ pyproject.toml
 ├─ setup.py
+├─ test.py
 ├─ logo.png
 ├─ README.md
 └─ src/
@@ -51,9 +52,17 @@ To reinstall for local Dev:
 pip uninstall -y jobcurator  # ignore error if not installed
 pip install -e .
 ```
-(coming soon) To install package once published to PyPI:
+(coming soon) To install the package once published to PyPI:
 ```bash
 pip install jobcurator
+```
+
+## 🧪 Testing code
+Run main folder run test.py
+```bash
+python test.py                   # n_jobs=10 (capped to len(jobs)), ratio=0.5
+python test.py --n-jobs 5        # n_jobs=5, ratio=0.5
+python test.py --n-jobs 5 --ratio 0.3
 ```
 
 ---
