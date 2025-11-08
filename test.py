@@ -285,6 +285,6 @@ jobs = [
 curator = JobCurator(ratio=0.5)
 compressed_jobs = curator.dedupe_and_compress(jobs)
 print(len(jobs), "→", len(compressed_jobs))
-for j in compressed:
+for j in compressed_jobs:
     print(j.id, j.title, j.location.city)
 
