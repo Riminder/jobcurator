@@ -22,9 +22,6 @@ from .hash_utils import (
 class JobCurator:
     """
     Main entrypoint for dedupe + compression.
-
-    Configure once, then call .dedupe_and_compress(jobs, ratio=...)
-    or rely on the default ratio set at construction.
     """
     ratio: float = 1.0
     alpha: float = 0.6
@@ -35,16 +32,6 @@ class JobCurator:
     def dedupe_and_compress(self,
                             jobs: List[Job],
                             ratio: Optional[float] = None) -> List[Job]:
-        """
-        Dedupe + compress a list of jobs using hashing only.
-
-        Args:
-            jobs: list of Job objects.
-            ratio: compression ratio in (0,1]; if None, uses self.ratio.
-                   1.0 = keep all jobs.
-        Returns:
-            A list of Job objects after dedupe + compression.
-        """
         r = self.ratio if ratio is None else ratio
 
         if r >= 1.0:
