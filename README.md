@@ -15,6 +15,15 @@
    - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
    - Respects a global **compression ratio** (e.g. keep 40% of jobs)
 
+#### 🔍 Hashing backends comparison
+
+| Backend          | Requirements        | Pros                                                                 | Cons                                                                                   | Typical use cases                                                                     |
+|------------------|---------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
+| `default_hash`   | None (built-in)     | • No extra deps  • Uses SimHash + LSH  • Geo-aware (3D loc)  • Uses categories & salary in signature | • Pure Python (slower on very large datasets)  • More tuning via code than via APIs   | Default choice for most pipelines, medium–large datasets where dependencies are a concern |
+| `sklearn_hash`   | `scikit-learn`      | • Uses HashingVectorizer (still hashing, no embeddings)  • Leverages optimized NN search  • Easy to extend with more ML tricks | • Needs scikit-learn  • Geo & categories encoded indirectly via extra tokens          | Text-heavy job feeds, experimentation with sklearn tools, easy prototyping with ML    |
+| `faiss_hash`     | `faiss-cpu` (or equivalent) | • Very fast nearest-neighbor search at scale  • Works on composite vector: signature bits + 3D loc + categories  • Designed for very large N | • Requires FAISS (platform-specific install)  • Distance is approximate Hamming/geo mix | Huge job catalogs (hundreds of thousands / millions), latency-sensitive dedupe/compression |
+
+
 No dense text embeddings. Hash-based + classic ML only.
 
 ### 📋 TODO
@@ -45,6 +54,8 @@ jobcurator/
       ├─ __init__.py
       ├─ models.py
       ├─ hash_utils.py
+      ├─ sklearn_backends.py
+      ├─ faiss_backends.py
       └─ curator.py
 ```
 
