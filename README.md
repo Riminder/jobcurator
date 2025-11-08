@@ -9,7 +9,7 @@ TODO
 - Taxonomy Normalization 
 
 ## Repository structure
-<code>
+```yaml
 jobcurator/
 ├─ pyproject.toml
 ├─ README.md
@@ -19,8 +19,9 @@ jobcurator/
       ├─ models.py
       ├─ hash_utils.py
       └─ curator.py
-</code>
+```
 
+## Code example
 
 ```python
 from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField
@@ -56,4 +57,5 @@ jobs = [
 curator = JobCurator(ratio=0.4)
 compressed_jobs = curator.dedupe_and_compress(jobs)
 print(len(jobs), "→", len(compressed_jobs))
+```
 
