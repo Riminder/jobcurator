@@ -29,13 +29,12 @@ def hash_int(value: str, seed: int = 0, bits: int = 64) -> int:
 
 def hamming_distance(a: int, b: int) -> int:
     """
-    Hamming distance between two integers, compatible with Python < 3.8.
+    Hamming distance between two integers; compatible with Python < 3.8 (no int.bit_count).
     """
     x = a ^ b
-    # classic popcount without int.bit_count()
     count = 0
     while x:
-        x &= x - 1  # clear lowest set bit
+        x &= x - 1
         count += 1
     return count
 

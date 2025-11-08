@@ -10,16 +10,12 @@ import math
 class Category:
     """
     Hierarchical category node.
-
-    Example:
-      dim = "job_function"
-      level_path = ["Engineering", "Software", "Backend"]
     """
-    id: str                        # unique id in your taxonomy
-    label: str                     # human label, e.g. "Backend"
-    level: int                     # 0 = root, 1 = child, ...
+    id: str
+    label: str
+    level: int
     parent_id: Optional[str] = None
-    level_path: List[str] = field(default_factory=list)  # from root to this node
+    level_path: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -38,8 +34,8 @@ class Location3DField:
     """
     Geographical point with 3D coordinates:
     - lat, lon: degrees
-    - alt_m: altitude in meters above sea level
-    - x, y, z: Earth-centered Cartesian coordinates in meters (computed)
+    - alt_m: altitude in meters
+    - x, y, z: computed Earth-centered Cartesian coordinates (meters)
     """
     lat: float
     lon: float
@@ -47,18 +43,13 @@ class Location3DField:
     city: Optional[str] = None
     country_code: Optional[str] = None
 
-    # internal / computed Cartesian coords (Earth-centered)
     x: float = field(default=0.0, init=False)
     y: float = field(default=0.0, init=False)
     z: float = field(default=0.0, init=False)
 
     def compute_xyz(self, earth_radius_m: float = 6_371_000.0) -> None:
-        """
-        Convert (lat, lon, alt_m) to 3D Cartesian (x, y, z) in meters.
-        Simple spherical Earth model.
-        """
-        phi = math.radians(self.lat)    # latitude
-        lam = math.radians(self.lon)    # longitude
+        phi = math.radians(self.lat)
+        lam = math.radians(self.lon)
         r = earth_radius_m + self.alt_m
 
         self.x = r * math.cos(phi) * math.cos(lam)
@@ -85,10 +76,20 @@ class Job:
     source: Optional[str] = None
     created_at: Optional[datetime] = None
 
-    # internal/computed fields (not part of external schema)
+    # internal/computed fields
     length_tokens: int = field(default=0, init=False)
     length_score: float = field(default=0.0, init=False)
     completion_score_val: float = field(default=0.0, init=False)
     quality: float = field(default=0.0, init=False)
     exact_hash: int = field(default=0, init=False)
     signature: int = field(default=0, init=False)
+    simhash_bucket: int = field(default=0, init=False)
+    # optional fields for selection explanation / clustering
+    lsh_bucket: int = field(default=0, init=False)
+    is_selected: bool = field(default=False, init=False)
+    selection_score: float = field(default=0.0, init=False)
+    selection_reason: Optional[str] = field(default=None, init=False)
+    cluster_id: Optional[int] = field(default=None, init=False)
+    cluster_size: Optional[int] = field(default=None, init=False)
+    cluster_distance: Optional[float] = field(default=None, init=False)
+    vector: Optional[List[float]] = field(default=None, init=False)

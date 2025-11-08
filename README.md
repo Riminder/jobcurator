@@ -10,12 +10,12 @@
 ### ✨ Available features:
 - Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
 `jobcurator` takes a list of structured job objects and:
-  - Deduplicates using **hashing** (exact hash + SimHash + LSH)
-  - Scores jobs by **length & completion** (and optional freshness/source)
-  - Preserves **variance** by keeping jobs that are **far apart** in hash space
-  - Respects a global **compression ratio** (e.g., keep 40% of jobs)
+   - Deduplicates using **hashing** (exact hash + SimHash + LSH / sklearn / FAISS)
+   - Scores jobs by **length & completion** (and optional freshness/source)
+   - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
+   - Respects a global **compression ratio** (e.g. keep 40% of jobs)
 
-No dense embeddings. Fully hashing + simple geometry (3D coordinates for cities).
+No dense text embeddings. Hash-based + classic ML only.
 
 ### 📋 TODO
 - publish package to PyPI:
@@ -66,6 +66,10 @@ pip install -e .
 ```bash
 pip install jobcurator
 ```
+Optional extras:
+```bash
+pip install scikit-learn faiss-cpu
+```
 
 ## 🧪 Testing code
 Run main folder run test.py
@@ -89,7 +93,12 @@ from datetime import datetime
 
 ### Example usage
 
+
+
 ```python
+
+# 1) Build some jobs
+
 jobs = [
     Job(
         id="job-1",
@@ -126,14 +135,66 @@ jobs = [
     ),
 ]
 
+# 2) Choose a backend
+#   - Option 1: "default_hash" : SimHash + LSH + geo distance (no extra deps)
+
 curator = JobCurator(
-    ratio=0.4,                 # keep 40% of jobs
-    alpha=0.6,                 # quality vs diversity tradeoff
-    max_per_cluster_in_pool=3, # max jobs per cluster entering the global pool
+    # Global parameters
+    ratio=0.5,                  # keep ~50% of jobs
+    alpha=0.6,                  # quality vs diversity tradeoff
+    max_per_cluster_in_pool=3,  # max jobs per cluster entering pool
+    backend="default_hash",
+    use_outlier_filter=False,   # set True to enable IsolationForest
+    outlier_contamination=0.05, # used only if use_outlier_filter=True
+
+    # Hashing-specific parameters for default_hash
+    d_sim_threshold=20,         # SimHash Hamming distance threshold
+    max_cluster_distance_km=150.0,  # max geo distance (km) within a cluster
 )
 
+#   - Option 2: "sklearn_hash" : HashingVectorizer + NearestNeighbors (needs scikit-learn)
+
+# requires: pip install scikit-learn
+curator_sklearn = JobCurator(
+    # Global parameters
+    ratio=0.5,
+    alpha=0.6,
+    max_per_cluster_in_pool=3,
+    backend="sklearn_hash",
+    use_outlier_filter=True,    # IsolationForest pre-filter
+    outlier_contamination=0.05, # proportion of jobs flagged as outliers
+
+    # Hashing-specific params: none for sklearn_hash
+    # d_sim_threshold and max_cluster_distance_km are not used by this backend
+)
+
+#   - Option 3: "faiss_hash"   : FAISS on signature + 3D location + categories (needs faiss)
+
+# requires: pip install faiss-cpu
+curator_faiss = JobCurator(
+    # Global parameters
+    ratio=0.5,
+    alpha=0.6,
+    max_per_cluster_in_pool=3,
+    backend="faiss_hash",
+    use_outlier_filter=False,
+    outlier_contamination=0.05,
+
+    # Hashing-specific parameters for faiss_hash
+    d_sim_threshold=20,         # distance threshold in FAISS vector space
+    # max_cluster_distance_km is not used in faiss backend
+)
+
+# 3) Compute the results
+
+
 compressed_jobs = curator.dedupe_and_compress(jobs)
-print(len(jobs), "→", len(compressed_jobs))
+
+print(f"{len(jobs)} → {len(compressed_jobs)} jobs kept")
+for j in compressed_jobs:
+    print(j.id, j.title, j.location.city, f"quality={j.quality:.3f}")
+
+
 ```
 
 ### JobCurator parameters
@@ -189,6 +250,14 @@ Multiple dimensions (e.g. `job_function`, `industry`, `seniority`) can coexist i
 * `alt_m`: altitude in meters
 * `city`, `country_code`: metadata
 * `x, y, z`: computed Earth-centered coordinates for **3D distance** (used to avoid merging jobs from very distant cities)
+
+## ⚙️ Backends
+
+`JobCurator(backend=...)`:
+
+* `default_hash` – `SimHash` + `LSH` + geo distance
+* `sklearn_hash` – `scikit-learn` `HashingVectorizer` + `NearestNeighbors` (uses text + 3D location + categories)
+* `faiss_hash` – `FAISS` on composite vectors built from signature bits + 3D location + categories
 
 ---
 

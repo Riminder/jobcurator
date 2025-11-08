@@ -1,5 +1,3 @@
-# test.py
-
 import argparse
 from datetime import datetime
 
@@ -7,7 +5,6 @@ from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField
 
 
 def build_jobs():
-    # Example jobs; replace with your own data source if needed
     return [
         Job(
             id="job-1",
@@ -292,6 +289,13 @@ def parse_args():
         default=0.5,
         help="Compression ratio passed to JobCurator (default: 0.5).",
     )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="default_hash",
+        choices=["default_hash", "sklearn_hash", "faiss_hash"],
+        help="Backend to use for clustering/dedupe.",
+    )
     return parser.parse_args()
 
 
@@ -304,23 +308,20 @@ def main():
         print("No jobs available.")
         return
 
-    # enforce 1 <= n_jobs <= len(jobs)
     n_jobs = max(1, min(args.n_jobs, total_jobs))
 
-    curator = JobCurator(ratio=args.ratio)
+    curator = JobCurator(ratio=args.ratio, backend=args.backend)
     compressed = curator.dedupe_and_compress(jobs)
 
     print(f"Total jobs: {total_jobs}")
-    print(f"n_jobs = {n_jobs}, ratio = {args.ratio}")
+    print(f"n_jobs = {n_jobs}, ratio = {args.ratio}, backend = {args.backend}")
     print(f"Compressed jobs: {len(compressed)}")
 
-    # 1) show very first n_jobs original jobs
     print("\n=== First n_jobs original jobs ===")
     for j in jobs[:n_jobs]:
         city = j.location.city or "Unknown"
         print(f"- {j.id}: {j.title} @ {city}")
 
-    # 2) show top n_jobs * ratio of compressed jobs
     num_selected_to_show = int(n_jobs * args.ratio)
     if num_selected_to_show <= 0:
         num_selected_to_show = 1
