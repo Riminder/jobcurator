@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+src/jobcurator/__init__.py
+src/jobcurator/curator.py
+src/jobcurator/hash_utils.py
+src/jobcurator/models.py
+src/jobcurator.egg-info/PKG-INFO
+src/jobcurator.egg-info/SOURCES.txt
+src/jobcurator.egg-info/dependency_links.txt
+src/jobcurator.egg-info/top_level.txt
