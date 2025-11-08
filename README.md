@@ -40,13 +40,18 @@ jobcurator/
 ```
 
 ## 🚀 Installation
-For local Dev:
+To install for local Dev:
 ```bash
 git clone https://github.com/<your-username>/jobcurator.git
 cd jobcurator
 pip install -e .
 ```
-(coming soon) Once published to PyPI:
+To reinstall for local Dev:
+```bash
+pip uninstall -y jobcurator  # ignore error if not installed
+pip install -e .
+```
+(coming soon) To install package once published to PyPI:
 ```bash
 pip install jobcurator
 ```
