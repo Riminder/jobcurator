@@ -5,8 +5,9 @@ Open source Machine Learning library to clean, normalize, structure, compress, a
 - Hash-based job deduplication and compression with diversity preservation
 
 ### TODO
-- Job Parsing
-- Taxonomy Normalization 
+- add Job Parsing
+- add Job dynamic Tagging with Taxonomy
+- add job auto-formating & Normalization
 
 
 ## Repository structure
