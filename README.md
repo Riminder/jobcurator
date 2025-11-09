@@ -5,22 +5,16 @@
 
 
 
-# ℹ️ Welcome to the jobcurator library
+# 🤗 Welcome to the jobcurator library
 `jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
-
-### 📬 Contact
-
-For questions, ideas, or coordination around larger changes:
-
-**Primary maintainer**
-📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
 
 ## 📚 Table of Contents
 
-- [ℹ️ About the jobcurator library](#ℹ️-about-the-jobcurator-library)
+- [About the jobcurator library](#-about-the-jobcurator-library)
+- [Motivation: Why jobcurator?](#-motivation-why-jobcurator)
   - [Contact](#-contact)
   - [Available features](#-available-features)
-  - [Backends comparison](#️-backends-comparison)
+  - [Backends comparison](#-backends-comparison)
   - [TODO](#-todo)
 - [Repository structure](#-repository-structure)
 - [Installation](#-installation)
@@ -39,6 +33,16 @@ For questions, ideas, or coordination around larger changes:
   - [Code Style & Guidelines](#-code-style--guidelines)
   - [Public API & Backward Compatibility](#-public-api--backward-compatibility)
   - [Pull Requests](#-pull-requests)
+
+## 💡 Motivation: Why jobcurator?
+This library exists because job feeds in the aggregator world and the programmatic job distribution world are extremely noisy, redundant, low quality, and not normalized. jobcurator was created to take raw job firehose feeds and turn them into high-quality, diversified and deduplicated structured job data — before they hit searching, ranking, matching or bidding engines.
+
+### 📬 Contact
+
+For questions, ideas, or coordination around larger changes:
+
+**Primary maintainer**
+📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
 
 ### ✨ Available features:
 - Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
