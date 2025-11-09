@@ -1,31 +1,85 @@
-# Byte-compiled / optimized / DLL files
+# --- Python bytecode / cache ---
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
-.venv/
-venv/
-env/
-.env/
-
-# Distribution / packaging
+# --- Packaging / build artifacts ---
 build/
 dist/
 *.egg-info/
 .eggs/
+pip-wheel-metadata/
+.wheelhouse/
 
-# Test / coverage
+# --- Virtual environments / Python env managers ---
+.venv/
+venv/
+env/
+.env/
+.conda/
+.python-version
+
+# --- Logs & debug ---
+*.log
+logs/
+debug.log
+pytest-debug.log
+
+# --- Tests / coverage / linters ---
+.pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
-.pytest_cache/
+.nox/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+coverage.xml
 
-# IDE / editor
+# --- Editors / IDEs ---
 .vscode/
 .idea/
-*.swp
-*.swo
+*.iml
+*.code-workspace
 
-# macOS
+# --- OS cruft ---
 .DS_Store
+Thumbs.db
+
+# --- Jupyter / notebooks ---
+.ipynb_checkpoints/
+*.ipynb
+
+# --- Local data & artifacts produced by demos/tests ---
+# (incremental pipeline + local store examples)
+local_store/
+data/
+tmp/
+*.jsonl
+*.jsonl.gz
+*.json.gz
+*.pkl
+*.pickle
+
+# --- FAISS indices (if persisted) ---
+*.faiss
+*.index
+
+# --- SQLite / local DB files ---
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Env / secrets ---
+*.env
+.env.*
+*.secrets*
+*.key
+*.pem
+
+# --- Docs build output (if any) ---
+site/
+builddocs/
