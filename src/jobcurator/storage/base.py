@@ -153,7 +153,7 @@ def process_batch(
     Storage-agnostic incremental pipeline for a batch:
 
       1. Load (or create) the global CuckooFilter from the store.
-      2. Deduplicate & compress jobs via JobCurator (approx_seen_filter).
+      2. Deduplicate & compress jobs via JobCurator (seen_filter).
       3. Persist compressed jobs via the store.
       4. Save updated CuckooFilter back to the store.
     """

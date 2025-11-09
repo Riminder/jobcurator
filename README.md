@@ -433,10 +433,10 @@ The library includes a simple `CuckooFilter`:
 
   * If `exact_hash` is *probably* present → the job is skipped.
   * Otherwise → `add(exact_hash)` and the job is processed.
-* Integrated via `approx_seen_filter` parameter in:
+* Integrated via `seen_filter` parameter in:
 
 ```python
-compressed = curator.dedupe_and_compress(jobs, approx_seen_filter=seen_filter)
+compressed = curator.dedupe_and_compress(jobs, seen_filter=seen_filter)
 ```
 
 Where `seen_filter` is typically an instance of `jobcurator.CuckooFilter`.

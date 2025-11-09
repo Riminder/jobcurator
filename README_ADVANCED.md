@@ -241,7 +241,7 @@ compressed_jobsN = process_batch(
 What happens:
 
 1. Load or create a **global CuckooFilter** from the store.
-2. Run `curator.dedupe_and_compress(jobsN, approx_seen_filter=cuckoo_filter)`:
+2. Run `curator.dedupe_and_compress(jobsN, seen_filter=cuckoo_filter)`:
 
    * dedup + compress **inside** the batch,
    * drop jobs that seem already seen (exact hash), based on previous batches.
