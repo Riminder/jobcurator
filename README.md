@@ -606,6 +606,32 @@ The solution is:
    * `process_batch(StoreDB, jobs, JobCurator)` for incremental batches
    * `global_reselect_in_store(StoreDB, ratio, alpha)` for global rebalancing
 
+Test with **local storage**:
+```python
+python3 test_incremental.py \
+  --backend default_hash \
+  --ratio 0.5 \
+  --alpha 0.6 \
+  --storage local \
+  --dsn "" \
+  --batches 3 \
+  --n-per-batch 20 \
+  --clear-local \
+  # --no-global-reselect   # (optional) add this flag if you want to skip final global rebalancing
+```
+Test with **SQL storage** (Postgres):
+```python
+python test_incremental.py \
+  --backend default_hash \
+  --ratio 0.5 \
+  --alpha 0.6 \
+  --storage sql \
+  --dsn "dbname=mydb user=myuser password=mypass host=localhost port=5432" \  
+  --batches 3 \
+  --n-per-batch 30 \
+  # --no-global-reselect   # optional
+```
+
 For more details, see the [Advanced documentation](README_ADVANCED.md).
 
 ---
