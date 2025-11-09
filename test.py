@@ -327,7 +327,7 @@ def main():
         max_multiprobe_flips=1,
     )
 
-    compressed = curator.dedupe_and_compress(jobs, approx_seen_filter=seen_filter)
+    compressed = curator.dedupe_and_compress(jobs, seen_filter=seen_filter)
 
     print(f"Total jobs: {total_jobs}")
     print(f"n_preview_jobs = {n_preview}, ratio = {args.ratio}, backend = {args.backend}")
