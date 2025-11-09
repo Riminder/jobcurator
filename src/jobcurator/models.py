@@ -83,8 +83,8 @@ class Job:
     quality: float = field(default=0.0, init=False)
     exact_hash: int = field(default=0, init=False)
     signature: int = field(default=0, init=False)
-    simhash_bucket: int = field(default=0, init=False)
     # optional fields for selection explanation / clustering
+    simhash_bucket: int = field(default=0, init=False)
     lsh_bucket: int = field(default=0, init=False)
     is_selected: bool = field(default=False, init=False)
     selection_score: float = field(default=0.0, init=False)

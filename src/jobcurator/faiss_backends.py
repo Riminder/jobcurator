@@ -3,10 +3,17 @@ from __future__ import annotations
 from typing import Dict, List
 from collections import defaultdict
 
-import numpy as np
-
 from .models import Job
 from .hash_utils import flatten_category_tokens
+
+
+try:
+    import numpy as np # type: ignore
+except ImportError as e:  # pragma: no cover
+    raise RuntimeError(
+        "numpy is required for hashing. Install with: pip install numpy"
+    ) from e
+
 
 _HAS_FAISS = True
 try:

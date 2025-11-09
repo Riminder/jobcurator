@@ -85,9 +85,23 @@ pip install scikit-learn faiss-cpu
 ## 🧪 Testing code
 Run main folder run test.py
 ```bash
-python3 test.py                   # n_jobs=10 (capped to len(jobs)), ratio=0.5
-python3 test.py --n-jobs 5        # n_jobs=5, ratio=0.5
-python3 test.py --n-jobs 5 --ratio 0.3
+# 1) Default backend (SimHash + LSH + geo), keep ~50%, preview 10 jobs (capped to len(jobs))
+python3 test.py                        # n-preview-jobs=10 (capped to len(jobs)), ratio=0.5
+
+# 2) Default backend (SimHash + LSH + geo), more aggressive compression  keep ~30%, preview 8 jobs
+python3 test.py --backend default_hash --ratio 0.3 --n-preview-jobs 8
+
+# 3) sklearn backend (HashingVectorizer + NearestNeighbors), keep ~50%
+#    (requires: pip install scikit-learn)
+python3 test.py --backend sklearn_hash --ratio 0.5 --n-preview-jobs 5
+
+# 4) FAISS backend (signature bits + 3D loc + categories), keep ~40%, preview 5
+#    (requires: pip install faiss-cpu)
+python3 test.py --backend faiss_hash --ratio 0.4 --n-preview-jobs 5
+
+# Short option for preview:
+python3 test.py -n 5 --backend default_hash --ratio 0.5
+python3 test.py -n 5 --backend faiss_hash  --ratio 0.4
 ```
 
 ---
@@ -205,8 +219,88 @@ print(f"{len(jobs)} → {len(compressed_jobs)} jobs kept")
 for j in compressed_jobs:
     print(j.id, j.title, j.location.city, f"quality={j.quality:.3f}")
 
-
 ```
+
+---
+
+
+## 🧱 Core Concepts
+
+### Job schema
+
+A `Job` is a structured object with:
+
+- `id`: unique identifier
+- `title`: job title (string)
+- `text`: full job description (string)
+- `categories`: hierarchical taxonomy per dimension (`dict[str, list[Category]]`)
+- `location`: `Location3DField` with lat/lon/alt (internally converted to 3D x,y,z)
+- `salary`: optional `SalaryField`
+- Optional metadata: `company`, `contract_type`, `source`, `created_at`
+- Internal fields (computed by `JobCurator`):
+  - `length_tokens`, `length_score`
+  - `completion_score_val`
+  - `quality`
+  - `exact_hash` (strict dedup key)
+  - `signature` (128-bit composite hash used by backends)
+
+### Category schema
+
+A `Category` is a hierarchical node:
+
+- `id`: unique taxonomy ID
+- `label`: human-readable label
+- `level`: depth in hierarchy (0 = root)
+- `parent_id`: optional parent category id
+- `level_path`: full path from root (e.g. `["Engineering", "Software", "Backend"]`)
+
+Multiple dimensions (e.g. `job_function`, `industry`, `seniority`) can coexist in `categories`:
+
+```python
+job.categories = {
+    "job_function": [Category(...), ...],
+    "industry": [Category(...), ...],
+}
+```
+
+### Location schema with 3D coordinates
+
+`Location3DField`:
+
+* `lat`, `lon`: degrees
+* `alt_m`: altitude in meters
+* `city`, `country_code`: human-readable metadata
+* `x, y, z`: **Earth-centered 3D coordinates** (computed internally by `compute_xyz()`)
+
+These 3D coordinates are used to compute **actual distances between cities** and avoid merging jobs that are geographically too far when clustering.
+
+### Salary schema
+
+`SalaryField`:
+
+* `min_value`, `max_value`: numeric range (optional)
+* `currency`: e.g. `"EUR"`, `"USD"`
+* `period`: `"year"`, `"month"`, `"day"`, `"hour"`
+
+Salary is used both in completion/quality scoring and in the exact/meta hashes (bucketed).
+
+### CuckooFilter (approximate “seen before”)
+
+The library includes a simple `CuckooFilter`:
+
+* Used to **avoid re-processing jobs** that have already been seen across runs or batches.
+* Works on `exact_hash` values:
+
+  * If `exact_hash` is *probably* present → the job is skipped.
+  * Otherwise → `add(exact_hash)` and the job is processed.
+* Integrated via `approx_seen_filter` parameter in:
+
+```python
+compressed = curator.dedupe_and_compress(jobs, approx_seen_filter=seen_filter)
+```
+
+Where `seen_filter` is typically an instance of `jobcurator.CuckooFilter`.
+
 
 ### JobCurator parameters
 
@@ -226,60 +320,56 @@ JobCurator(
 
 ---
 
-## 🧱 Core Concepts
+### JobCurator Backends
 
-### Job schema
+You choose the dedup clustering strategy via:
 
-A `Job` is a structured object with:
+```python
+JobCurator(backend=...)
+```
 
-* `id`: unique identifier
-* `title`: job title (string)
-* `text`: full job description (string)
-* `categories`: hierarchical taxonomy per dimension (`dict[str, list[Category]]`)
-* `location`: `Location3DField` with lat/lon/alt (internally converted to 3D x,y,z)
-* `salary`: optional `SalaryField`
-* Optional: `company`, `contract_type`, `source`, `created_at`
-* Internal fields: `length_score`, `completion_score_val`, `quality`, `exact_hash`, `signature` (computed by `JobCurator`)
+Available backends:
 
-### Category schema
+* **`default_hash`**
 
-A `Category` is a hierarchical node:
+  * SimHash + **LSH** (with optional **Multi-probe LSH**) on text.
+  * Geo-aware: enforces a maximum **3D distance** between jobs in the same cluster.
+  * Uses categories and salary in the composite signature.
+  * Pure Python, no external dependencies.
 
-* `id`: unique taxonomy ID
-* `label`: human-readable label
-* `level`: depth in hierarchy (0 = root)
-* `parent_id`: optional parent category id
-* `level_path`: full path from root (e.g. `["Engineering", "Software", "Backend"]`)
+* **`sklearn_hash`**
 
-Multiple dimensions (e.g. `job_function`, `industry`, `seniority`) can coexist in `categories`.
+  * Uses `scikit-learn`:
 
-### Location schema with 3D coordinates
+    * `HashingVectorizer` on text + encoded 3D location + category tokens.
+    * `NearestNeighbors` (cosine radius) to form clusters.
+  * Compatible with `IsolationForest` for outlier filtering.
+  * Requires: `pip install scikit-learn`.
 
-`Location3DField`:
+* **`faiss_hash`**
 
-* `lat`, `lon`: in degrees
-* `alt_m`: altitude in meters
-* `city`, `country_code`: metadata
-* `x, y, z`: computed Earth-centered coordinates for **3D distance** (used to avoid merging jobs from very distant cities)
+  * Uses **FAISS** (`IndexFlatL2`) on composite vectors:
 
-## ⚙️ Backends
+    [
+    [\text{signature bits} + \text{normalized (x,y,z)} + \text{category richness}]
+    ]
 
-`JobCurator(backend=...)`:
+  * Designed for large-scale catalogs (fast nearest-neighbor search).
 
-* `default_hash` – `SimHash` + `LSH` + geo distance
-* `sklearn_hash` – `scikit-learn` `HashingVectorizer` + `NearestNeighbors` (uses text + 3D location + categories)
-* `faiss_hash` – `FAISS` on composite vectors built from signature bits + 3D location + categories
+  * Requires: `pip install faiss-cpu`.
+
 
 ---
+
 
 ## ⚙️ How It Works (High Level)
 
 1. **Preprocessing & scoring**
 
-   * Compute token length → normalize to `length_score ∈ [0,1]` (using p10/p90 percentiles).
-   * Compute `completion_score` based on presence of key fields (title, text, location, salary, categories, company, contract_type).
-   * Optional `freshness_score` and `source_quality`.
-   * Combine into:
+   - Compute token length of `title + text` → normalize to `length_score ∈ [0,1]` using p10/p90 percentiles.
+   - Compute `completion_score` based on presence of key fields: title, text, location, salary, categories, company, contract_type.
+   - Compute `freshness_score` (based on `created_at`) and `source_quality` (e.g. `direct` vs `job_board`).
+   - Combine into a single quality score:
 
      ```text
      quality(j) = 0.3 * length_score
@@ -288,47 +378,106 @@ Multiple dimensions (e.g. `job_function`, `industry`, `seniority`) can coexist i
                 + 0.1 * source_quality
      ```
 
-2. **Exact hash**
+2. **Approximate “seen before” filter (CuckooFilter)**
 
-   * Build a canonical string from title + categories + coarse location + salary bucket + text.
-   * Use `blake2b` to get a 64-bit `exact_hash`.
-   * Remove strict duplicates.
+   - Optionally use an internal **CuckooFilter** to track jobs across runs or batches.
+   - For each job:
+     - If `exact_hash(j)` is *probably* already in the filter → skip.
+     - Otherwise → `add(exact_hash(j))` to the filter and keep the job.
+   - This avoids re-processing jobs that have already been seen.
 
-3. **Composite signature (no embeddings)**
+3. **Exact hash dedup (strict duplicates)**
 
-   * 64-bit **SimHash** on `title + text`.
-   * 64-bit **feature-hash** on categories, location, salary.
-   * Concatenate into a 128-bit `signature = (simhash << 64) | meta_bits`.
+   - Build a canonical string from:
+     - normalized title,
+     - flattened categories,
+     - coarse location bucket,
+     - salary bucket,
+     - normalized full text.
+   - Hash with `blake2b` into a 64-bit `exact_hash`.
+   - Keep only one job per `exact_hash` (hard dedup).
 
-4. **LSH clustering**
+4. **Composite signature (no embeddings)**
 
-   * Use LSH on the SimHash part to find candidate near-duplicates.
-   * Accept a pair as same cluster if:
+   For each job, build a 128-bit `signature`:
 
-     * Hamming distance on SimHash ≤ threshold
-     * 3D geo distance between locations ≤ `max_cluster_distance_km`
-   * Group jobs into clusters via union–find.
+   - 64-bit **SimHash** on normalized `title + text`.
+   - 64-bit **meta feature-hash** on categories, location (city, country, coords), salary.
+   - Concatenate:
 
-5. **Intra-cluster ranking**
+     ```text
+     signature = (simhash << 64) | meta_bits
+     ```
 
-   * Within each cluster, sort jobs by `quality` descending.
+   This signature is used by the different backends.
 
-6. **Global compression with diversity**
+5. **Clustering (backend-dependent)**
 
-   * Build a pool with the top N jobs per cluster.
+   Depending on `backend`:
 
-   * Greedy selection:
+   ### a. `backend="default_hash"` – SimHash + Multi-probe LSH + geo
 
-     * Start from the highest-quality job.
-     * Iteratively pick the job maximizing:
+   - Take the **SimHash** part of the signature (64 bits).
+   - Split into bands → Locality Sensitive Hashing.
+   - **Multi-probe LSH**:
+     - For each band, also explore neighboring band keys by flipping a few bits (configurable `max_multiprobe_flips`).
+     - This increases recall for near-duplicates that differ in a few bits.
+   - Candidate pairs are accepted into the same cluster if:
+     - Hamming distance on SimHash ≤ `d_sim_threshold`
+     - 3D geo distance between locations ≤ `max_cluster_distance_km`
+   - Use union–find to build clusters.
 
-       ```text
-       diversified_score = alpha * quality + (1 - alpha) * normalized_min_hamming_distance_to_selected
-       ```
+   ### b. `backend="sklearn_hash"` – HashingVectorizer + NearestNeighbors
 
-   * Stop when you’ve selected `ceil(ratio * N_original)` jobs.
+   - Build text features with `HashingVectorizer` over:
+     - title + text,
+     - coarse 3D location tokens (x,y,z),
+     - flattened category tokens.
+   - Use `NearestNeighbors` (cosine radius) to connect jobs that are close in this hashed feature space.
+   - Connected components form clusters.
 
-Result: you keep **fewer, higher-quality, and more diverse** jobs.
+   ### c. `backend="faiss_hash"` – FAISS on signature + 3D loc + categories
+
+   - For each job, build a numeric vector:
+
+     ```text
+     [signature_bits (0/1), normalized (x,y,z), category_richness]
+     ```
+
+   - Index all vectors in **FAISS** (`IndexFlatL2`).
+   - For each job, query its nearest neighbors; pairs with distance ≤ `d_sim_threshold` are connected.
+   - Connected components become clusters.
+
+6. **Intra-cluster ranking**
+
+   - Inside each cluster, sort jobs by `quality` (descending).
+   - For each cluster, keep only the top `max_per_cluster_in_pool` jobs as candidates.
+
+7. **Global compression with diversity**
+
+   - Merge all per-cluster candidates into a global pool and deduplicate by `id`.
+   - Sort the pool by `quality` (descending).
+   - Greedy selection:
+
+     1. Start with the highest-quality job.
+     2. Repeatedly pick the job `j` in the pool that maximizes:
+
+        ```text
+        diversified_score(j) =
+            alpha * quality(j)
+          + (1 - alpha) * normalized_min_hamming_distance_to_selected(j)
+        ```
+
+        where the distance is computed on the full 128-bit `signature`.
+
+   - Stop when you’ve selected:
+
+     ```text
+     K = ceil(ratio * N_original)
+     ```
+
+   Result: you keep **fewer, higher-quality, and more diverse** jobs, while avoiding duplicates (strict + near-duplicates), and optionally skipping already-seen jobs via **CuckooFilter**.
+````
 
 ---
 

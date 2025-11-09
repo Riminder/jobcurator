@@ -57,6 +57,102 @@ def percentile(sorted_vals, q: float) -> float:
 
 
 # -------------------------
+# CuckooFilter (approx "seen before")
+# -------------------------
+
+
+class CuckooFilter:
+    """
+    Simple CuckooFilter for approximate membership queries.
+
+    - capacity    : expected number of elements
+    - bucket_size : slots per bucket
+    - fp_bits     : fingerprint size in bits
+    - max_kicks   : max number of cuckoo kicks on insert
+
+    Interface:
+      - value in filter
+      - filter.add(value)
+    """
+
+    def __init__(
+        self,
+        capacity: int = 1_000_000,
+        bucket_size: int = 4,
+        fp_bits: int = 8,
+        max_kicks: int = 500,
+    ):
+        if capacity <= 0:
+            capacity = 1
+        self.bucket_size = max(1, bucket_size)
+        self.fp_bits = max(1, fp_bits)
+        self.max_kicks = max(1, max_kicks)
+
+        self.num_buckets = max(1, capacity // self.bucket_size)
+        self.buckets = [[] for _ in range(self.num_buckets)]
+
+    def _fingerprint(self, value: int) -> int:
+        h = hash_int(str(value), seed=123, bits=64)
+        mask = (1 << self.fp_bits) - 1
+        fp = h & mask
+        if fp == 0:
+            fp = 1
+        return fp
+
+    def _index1(self, value: int) -> int:
+        h = hash_int(str(value), seed=456, bits=64)
+        return h % self.num_buckets
+
+    def _index2(self, index1: int, fp: int) -> int:
+        h = hash_int(str(fp), seed=789, bits=64)
+        return (index1 ^ (h % self.num_buckets)) % self.num_buckets
+
+    def add(self, value: int) -> None:
+        fp = self._fingerprint(value)
+        i1 = self._index1(value)
+        i2 = self._index2(i1, fp)
+
+        if len(self.buckets[i1]) < self.bucket_size:
+            self.buckets[i1].append(fp)
+            return
+        if len(self.buckets[i2]) < self.bucket_size:
+            self.buckets[i2].append(fp)
+            return
+
+        idx = i1
+        cur_fp = fp
+        for _ in range(self.max_kicks):
+            victim_pos = hash_int(str(cur_fp), seed=999, bits=64) % self.bucket_size
+            if victim_pos >= len(self.buckets[idx]):
+                victim_pos = len(self.buckets[idx]) - 1
+            if victim_pos < 0:
+                victim_pos = 0
+
+            self.buckets[idx][victim_pos], cur_fp = (
+                cur_fp,
+                self.buckets[idx][victim_pos],
+            )
+
+            idx = self._index2(idx, cur_fp)
+            if len(self.buckets[idx]) < self.bucket_size:
+                self.buckets[idx].append(cur_fp)
+                return
+
+        # if insertion fails, we silently drop (approx filter)
+
+    def __contains__(self, value: int) -> bool:
+        fp = self._fingerprint(value)
+        i1 = self._index1(value)
+        i2 = self._index2(i1, fp)
+
+        if fp in self.buckets[i1]:
+            return True
+        if fp in self.buckets[i2]:
+            return True
+        return False
+
+
+# -------------------------
 # Quality scoring
 # -------------------------
 
@@ -111,9 +207,9 @@ def freshness_score(job: Job) -> float:
     age_days = (datetime.utcnow() - job.created_at).days
     if age_days <= 0:
         return 1.0
-    if age_days >= 365:
+    if age_days >= 30:
         return 0.0
-    return 1.0 - (age_days / 365.0)
+    return 1.0 - (age_days / 30.0)
 
 
 def source_quality(job: Job) -> float:
@@ -256,7 +352,7 @@ def salary_bucket(job: Job) -> str:
 
 
 # -------------------------
-# Exact hash & LSH clustering
+# Exact hash & LSH clustering (+ Multi-probe)
 # -------------------------
 
 
@@ -282,28 +378,69 @@ def split_into_bands(simhash: int, bits: int = 64, bands: int = 8):
         yield b, band_bits
 
 
+def multiprobe_band_keys(
+    band_idx: int,
+    band_bits: int,
+    r: int,
+    max_flips: int = 1,
+):
+    """
+    Multi-probe LSH: generate, in addition to the main key, a few neighbors
+    by flipping bits in the band (Hamming distance 1).
+    """
+    # main key
+    yield band_idx, band_bits
+
+    if max_flips <= 0:
+        return
+
+    flips_done = 0
+    for i in range(r):
+        if flips_done >= max_flips:
+            break
+        neighbor = band_bits ^ (1 << i)
+        flips_done += 1
+        yield band_idx, neighbor
+
+
 def build_clusters_with_lsh(
     jobs: List[Job],
     sim_bits: int = 64,
     bands: int = 8,
     d_sim_threshold: int = 20,
     max_cluster_distance_km: float = 150.0,
+    use_multiprobe: bool = False,
+    max_multiprobe_flips: int = 1,
 ) -> List[List[Job]]:
     """
     Clusters jobs:
       - candidate pairs from LSH on SimHash(text)
       - filtered by SimHash Hamming distance and geo distance
+      - optional Multi-probe LSH (explore neighboring buckets)
     """
     simhash_map: Dict[str, int] = {}
     for job in jobs:
         simhash_map[job.id] = (job.signature >> 64) & ((1 << sim_bits) - 1)
 
     buckets: Dict[int, List[Job]] = defaultdict(list)
+    r = sim_bits // bands
+
     for job in jobs:
         sim = simhash_map[job.id]
         for band_idx, band_bits in split_into_bands(sim, bits=sim_bits, bands=bands):
-            bkey = hash_int(f"{band_idx}:{band_bits}", seed=999, bits=64)
-            buckets[bkey].append(job)
+            if use_multiprobe:
+                keys = multiprobe_band_keys(
+                    band_idx,
+                    band_bits,
+                    r=r,
+                    max_flips=max_multiprobe_flips,
+                )
+            else:
+                keys = [(band_idx, band_bits)]
+
+            for (b_idx, bits_val) in keys:
+                bkey = hash_int(f"{b_idx}:{bits_val}", seed=999, bits=64)
+                buckets[bkey].append(job)
 
     parent: Dict[str, str] = {job.id: job.id for job in jobs}
 

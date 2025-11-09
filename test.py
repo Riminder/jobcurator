@@ -1,7 +1,7 @@
 import argparse
 from datetime import datetime
 
-from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField
+from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField, CuckooFilter
 
 
 def build_jobs():
@@ -275,13 +275,20 @@ def build_jobs():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Test jobcurator: show first N original jobs, then top N*ratio compressed jobs."
+        description=(
+            "Test jobcurator: show first N preview jobs from the original list, "
+            "then top N*ratio jobs from the compressed set."
+        )
     )
     parser.add_argument(
-        "--n-jobs",
+        "-n",
+        "--n-preview-jobs",
         type=int,
         default=10,
-        help="Number of original jobs to display (default: 10, capped at total number of jobs).",
+        help=(
+            "Number of original jobs to preview (default: 10, "
+            "capped at total number of jobs)."
+        ),
     )
     parser.add_argument(
         "--ratio",
@@ -308,21 +315,30 @@ def main():
         print("No jobs available.")
         return
 
-    n_jobs = max(1, min(args.n_jobs, total_jobs))
+    n_preview = max(1, min(args.n_preview_jobs, total_jobs))
 
-    curator = JobCurator(ratio=args.ratio, backend=args.backend)
-    compressed = curator.dedupe_and_compress(jobs)
+    # integrated CuckooFilter
+    seen_filter = CuckooFilter(capacity=1_000_000)
+
+    curator = JobCurator(
+        ratio=args.ratio,
+        backend=args.backend,
+        use_multiprobe=True,
+        max_multiprobe_flips=1,
+    )
+
+    compressed = curator.dedupe_and_compress(jobs, approx_seen_filter=seen_filter)
 
     print(f"Total jobs: {total_jobs}")
-    print(f"n_jobs = {n_jobs}, ratio = {args.ratio}, backend = {args.backend}")
+    print(f"n_preview_jobs = {n_preview}, ratio = {args.ratio}, backend = {args.backend}")
     print(f"Compressed jobs: {len(compressed)}")
 
-    print("\n=== First n_jobs original jobs ===")
-    for j in jobs[:n_jobs]:
+    print("\n=== First n_preview_jobs original jobs ===")
+    for j in jobs[:n_preview]:
         city = j.location.city or "Unknown"
         print(f"- {j.id}: {j.title} @ {city}")
 
-    num_selected_to_show = int(n_jobs * args.ratio)
+    num_selected_to_show = int(n_preview * args.ratio)
     if num_selected_to_show <= 0:
         num_selected_to_show = 1
     num_selected_to_show = min(num_selected_to_show, len(compressed))

@@ -9,9 +9,9 @@ from .hash_utils import flatten_category_tokens
 
 _HAS_SKLEARN = True
 try:
-    from sklearn.feature_extraction.text import HashingVectorizer
-    from sklearn.neighbors import NearestNeighbors
-    from sklearn.ensemble import IsolationForest
+    from sklearn.feature_extraction.text import HashingVectorizer # type: ignore
+    from sklearn.neighbors import NearestNeighbors # type: ignore
+    from sklearn.ensemble import IsolationForest # type: ignore
 except ImportError:  # pragma: no cover
     _HAS_SKLEARN = False
 
