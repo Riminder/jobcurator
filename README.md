@@ -161,7 +161,7 @@ python3 test.py -n 5 --backend minhash_hash  --ratio 0.4
 ---
 
 
-## 🧩 Public API
+## 🧩 Public API a Example usage
 
 ### Import
 
@@ -170,7 +170,7 @@ from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField
 from datetime import datetime
 ```
 
-### Basic Example usage
+### Basic Jobcurator
 
 
 
