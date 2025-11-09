@@ -652,7 +652,7 @@ python3 test_incremental.py \
 ```
 Test with **SQL storage** (Postgres):
 ```python
-python test_incremental.py \
+python3 test_incremental.py \
   --backend default_hash \
   --ratio 0.5 \
   --alpha 0.6 \
