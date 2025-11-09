@@ -163,14 +163,46 @@ class JobCurator:
     use_multiprobe: bool = False
     max_multiprobe_flips: int = 1
 
+    # --- seen-filter helpers (keep inside the curator) ---
+    @staticmethod
+    def _seen_contains(seen, key: str) -> bool:
+        if seen is None or key is None:
+            return False
+        if hasattr(seen, "contains"):
+            try:
+                return bool(seen.contains(key))
+            except Exception:
+                return False
+        try:
+            return key in seen  # works for set-like
+        except Exception:
+            return False
+
+    @staticmethod
+    def _seen_add(seen, key: str) -> None:
+        if seen is None or key is None:
+            return
+        if hasattr(seen, "add"):
+            try:
+                seen.add(key)  # Bloom/Cuckoo/Set-like
+                return
+            except Exception:
+                pass
+        # best-effort no-op otherwise
+        return
+
 
     def dedupe_and_compress(
-    self,
-    jobs: List[Job],
-    ratio: Optional[float] = None) -> List[Job]:
+        self,
+        jobs: List[Job],
+        ratio: Optional[float] = None,
+        *,
+        seen_filter=None,
+    ) -> List[Job]:
         """
         Deduplicate + cluster + compress with diversity-aware greedy selection.
-        The effective keep-count is computed on the candidate pool (post-dedupe).
+        Uses an optional seen_filter (Bloom/Cuckoo/set) to skip already-seen jobs
+        and updates it with the kept items at the end.
         """
         # -------- input & early guards --------
         r = self.ratio if ratio is None else ratio
@@ -181,14 +213,26 @@ class JobCurator:
         if r <= 0.0:
             return []
         if r >= 1.0:
-            # Still do exact-hash dedupe if you prefer; otherwise return as-is
             return list(jobs)
 
-        # Optional outlier filtering (only if explicitly enabled)
+        # -------- optional outlier filtering --------
         if self.use_outlier_filter:
             # filter_outliers already imported; if sklearn isn't available,
             # your filter_outliers impl should gracefully no-op or raise.
             jobs = filter_outliers(jobs, contamination=self.outlier_contamination)
+            if not jobs:
+                return []
+
+        # -------- early skip via seen_filter --------
+        if seen_filter is not None:
+            fresh: List[Job] = []
+            for j in jobs:
+                # ensure we have exact_hash available for membership check
+                h = getattr(j, "exact_hash", None) or build_exact_hash(j)
+                j.exact_hash = h
+                if not self._seen_contains(seen_filter, h):
+                    fresh.append(j)
+            jobs = fresh
             if not jobs:
                 return []
 
@@ -203,7 +247,9 @@ class JobCurator:
             job.length_score = length_score(l, p10, p90)
             job.completion_score_val = completion_score(job)
             job.quality = compute_quality(job)
-            job.exact_hash = build_exact_hash(job)
+            # exact_hash may already be set above; keep consistent
+            if not getattr(job, "exact_hash", None):
+                job.exact_hash = build_exact_hash(job)
             job.signature = composite_signature(job)
 
         # -------- exact dedup --------
@@ -264,40 +310,35 @@ class JobCurator:
             if C:
                 pool.extend(C[: self.max_per_cluster_in_pool])
 
-        # Remove accidental dupes by id (can happen if backends overlap edges)
+        # dedupe by id in pool
         if not pool:
             return []
+        # dedupe by id in pool
         pool = list({j.id: j for j in pool}.values())
 
         # -------- determine K on the actual pool --------
         K = max(1, math.ceil(len(pool) * r))
         if K >= len(pool):
-            # nothing to compress—return pool as-is in quality order
-            return sorted(pool, key=lambda j: j.quality, reverse=True)
+            selected = sorted(pool, key=lambda j: j.quality, reverse=True)
+            # update seen_filter before returning
+            if seen_filter is not None:
+                for j in selected:
+                    self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
+            return selected
 
         # -------- diversity-aware greedy selection --------
         pool.sort(key=lambda j: j.quality, reverse=True)
-        selected: List[Job] = []
-
-        # seed with the best quality
-        first = pool.pop(0)
-        selected.append(first)
-
-        # clamp alpha to [0,1] to avoid surprises
-        alpha = self.alpha
-        if alpha < 0.0:
-            alpha = 0.0
-        elif alpha > 1.0:
-            alpha = 1.0
+        selected: List[Job] = [pool.pop(0)]  # seed with best quality (pool is already sorted desc)
+        alpha = min(max(self.alpha, 0.0), 1.0) # clamp alpha to [0,1] to avoid surprises
 
         while len(selected) < K and pool:
-            # compute each candidate's min Hamming distance to any selected
+            # compute min Hamming distance to any selected
             dmins = []
             for x in pool:
                 dmin = min(hamming_distance(x.signature, s.signature) for s in selected)
                 dmins.append((x, dmin))
 
-            # normalize diversity to [0,1] for stability
+            # normalize diversity
             dvals = [d for _, d in dmins]
             dmin_val, dmax_val = min(dvals), max(dvals)
             span = max(dmax_val - dmin_val, 1)
@@ -310,14 +351,19 @@ class JobCurator:
                 if score > best_score:
                     best_score = score
                     best_x = x
-
+                
             # safety: best_x should exist since pool not empty
             selected.append(best_x)
             pool.remove(best_x)
 
-        # if we still need to fill due to ties/rounding, top up by quality
+        # top-up if needed
         if len(selected) < K and pool:
             pool.sort(key=lambda j: j.quality, reverse=True)
             selected.extend(pool[: (K - len(selected))])
+
+        # -------- update seen_filter with kept items --------
+        if seen_filter is not None:
+            for j in selected:
+                self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
 
         return selected
