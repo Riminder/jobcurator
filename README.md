@@ -83,22 +83,6 @@ No dense text embeddings. Hash-based + classic ML only.
 ## 🗂️ Repository structure
 ```yaml
 jobcurator/
-├─ pyproject.toml
-├─ setup.py
-├─ test.py
-├─ logo.png
-├─ README.md
-└─ src/
-   └─ jobcurator/
-      ├─ __init__.py
-      ├─ models.py
-      ├─ hash_utils.py
-      ├─ sklearn_backends.py
-      ├─ faiss_backends.py
-      └─ curator.py
-```
-```yaml
-jobcurator/
 ├── pyproject.toml
 ├── README.md                 # main intro, installation, backends, examples
 ├── README_ADVANCED.md        # incremental pipelines + data model (advanced doc)
