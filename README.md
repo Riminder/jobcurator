@@ -5,7 +5,7 @@
 
 
 
-# ℹ️ Welcome to the `jobcurator` library
+# ℹ️ Welcome to the jobcurator library
 `jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
 
 ### 📬 Contact
@@ -18,10 +18,10 @@ For questions, ideas, or coordination around larger changes:
 ## 📚 Table of Contents
 
 - [ℹ️ About the `jobcurator` library](#ℹ️-about-the-jobcurator-library)
+  - [Contact](#-contact)
   - [Available features](#-available-features)
   - [Backends comparison](#️-backends-comparison)
   - [TODO](#-todo)
-  - [Contact](#-contact)
 - [Repository structure](#-repository-structure)
 - [Installation](#-installation)
 - [Testing code](#-testing-code)
