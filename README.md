@@ -15,14 +15,24 @@
    - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
    - Respects a global **compression ratio** (e.g. keep 40% of jobs)
 
-#### 🔍 Hashing backends comparison
+### ⚖️ Backends comparison
 
-| Backend          | Requirements        | Pros                                                                 | Cons                                                                                   | Typical use cases                                                                     |
-|------------------|---------------------|----------------------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------|
-| `default_hash`   | None (built-in)     | • No extra deps  • Uses SimHash + LSH  • Geo-aware (3D loc)  • Uses categories & salary in signature | • Pure Python (slower on very large datasets)  • More tuning via code than via APIs   | Default choice for most pipelines, medium–large datasets where dependencies are a concern |
-| `sklearn_hash`   | `scikit-learn`      | • Uses HashingVectorizer (still hashing, no embeddings)  • Leverages optimized NN search  • Easy to extend with more ML tricks | • Needs scikit-learn  • Geo & categories encoded indirectly via extra tokens          | Text-heavy job feeds, experimentation with sklearn tools, easy prototyping with ML    |
-| `faiss_hash`     | `faiss-cpu` (or equivalent) | • Very fast nearest-neighbor search at scale  • Works on composite vector: signature bits + 3D loc + categories  • Designed for very large N | • Requires FAISS (platform-specific install)  • Distance is approximate Hamming/geo mix | Huge job catalogs (hundreds of thousands / millions), latency-sensitive dedupe/compression |
-
+| Capability / Feature        | `default_hash`                                  | `minhash_hash`                                  | `sklearn_hash`                                       | `faiss_hash`                                              |
+|----------------------------|--------------------------------------------------|-------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------|
+| **Core algorithm**         | SimHash + LSH (± Multi-probe)                   | MinHash + Jaccard LSH (± Multi-probe)           | HashingVectorizer + NearestNeighbors (cosine)        | FAISS IndexFlatL2 on composite vectors                   |
+| **Similarity type**        | Angular / cosine-like                           | Jaccard on token/shingle sets                   | Cosine distance                                      | L2 distance                                              |
+| **Best for…**              | General-purpose hash+geo dedupe/compression     | Robust near-dupe on noisy / reordered text      | Text-heavy feeds + sklearn-based experimentation     | Huge catalogs, low latency, NN-heavy workloads           |
+| **Extra deps**             | None                                            | None                                            | `scikit-learn`                                       | `faiss-cpu` (+ NumPy)                                    |
+| **Typical scale (jobs)**   | ~1k → ~200k                                     | ~1k → ~200k                                      | ~1k → ~100k                                          | ~50k → 1M+                                               |
+| **Relative speed**         | Fast on CPU for small–medium datasets           | Slower than `default_hash` (more hashing work)  | Moderate, depends on sparse ops & RAM                | Very fast for large NN queries once indexed              |
+| **Explicit geo constraint**| Yes (3D distance filter in clustering)          | Yes (3D distance filter in clustering)          | No (only via tokens)                                 | No (geo only affects L2 distance)                        |
+| **3D location use**        | Hard geo radius (`max_cluster_distance_km`)     | Hard geo radius (`max_cluster_distance_km`)     | Encoded as coarse x/y/z tokens                       | Normalized (x,y,z) directly in vector                    |
+| **Text use**               | SimHash on title + text                         | Word n-gram shingles on title + text            | Text to sparse hashed vector                         | Encoded via signature bits                               |
+| **Categories use**         | In meta-hash (part of signature)                | Added as shingles in MinHash set                | As extra tokens to HashingVectorizer                 | As “richness” feature in vector                          |
+| **Salary use**             | Bucketed into meta-hash                         | Bucketed tokens in MinHash set                  | Via numeric/features (quality, etc.)                 | Indirect (via signature / numeric features)              |
+| **Main threshold**         | `d_sim_threshold` (Hamming on SimHash)          | `jaccard_threshold` (min Jaccard)               | Internal NN radius (not exposed in API)              | `d_sim_threshold` (max L2 in FAISS space)                |
+| **Multi-probe support**    | Yes (`use_multiprobe`, `max_multiprobe_flips`)  | Yes (`use_multiprobe`, `max_multiprobe_flips`)  | No                                                   | No                                                       |
+| **Outlier filter**         | Optional (`use_outlier_filter` + IsolationForest)| Optional (same)                                 | Optional (same)                                      | Optional (same)                                          |
 
 No dense text embeddings. Hash-based + classic ML only.
 
