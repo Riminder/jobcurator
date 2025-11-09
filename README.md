@@ -17,7 +17,7 @@ For questions, ideas, or coordination around larger changes:
 
 ## 📚 Table of Contents
 
-- [ℹ️ About the `jobcurator` library](#ℹ️-about-the-jobcurator-library)
+- [ℹ️ About the jobcurator library](#ℹ️-about-the-jobcurator-library)
   - [Contact](#-contact)
   - [Available features](#-available-features)
   - [Backends comparison](#️-backends-comparison)
