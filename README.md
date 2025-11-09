@@ -91,17 +91,20 @@ python3 test.py                        # n-preview-jobs=10 (capped to len(jobs))
 # 2) Default backend (SimHash + LSH + geo), more aggressive compression  keep ~30%, preview 8 jobs
 python3 test.py --backend default_hash --ratio 0.3 --n-preview-jobs 8
 
-# 3) sklearn backend (HashingVectorizer + NearestNeighbors), keep ~50%
+# 3) Default backend (MinHash + Jaccard LSH + geo),  keep ~50%, preview 5
+python3 test.py --backend minhash_hash --ratio 0.5 --n-preview-jobs 5
+
+# 4) sklearn backend (HashingVectorizer + NearestNeighbors), keep ~50%, preview 5
 #    (requires: pip install scikit-learn)
 python3 test.py --backend sklearn_hash --ratio 0.5 --n-preview-jobs 5
 
-# 4) FAISS backend (signature bits + 3D loc + categories), keep ~40%, preview 5
+# 5) FAISS backend (signature bits + 3D loc + categories), keep ~40%, preview 5
 #    (requires: pip install faiss-cpu)
 python3 test.py --backend faiss_hash --ratio 0.4 --n-preview-jobs 5
 
-# Short option for preview:
+# 6) Short option for preview:
 python3 test.py -n 5 --backend default_hash --ratio 0.5
-python3 test.py -n 5 --backend faiss_hash  --ratio 0.4
+python3 test.py -n 5 --backend minhash_hash  --ratio 0.4
 ```
 
 ---
@@ -161,41 +164,89 @@ jobs = [
 ]
 
 # 2) Choose a backend
-#   - Option 1: "default_hash" : SimHash + LSH + geo distance (no extra deps)
 
-curator = JobCurator(
-    # Global parameters
-    ratio=0.5,                  # keep ~50% of jobs
-    alpha=0.6,                  # quality vs diversity tradeoff
-    max_per_cluster_in_pool=3,  # max jobs per cluster entering pool
+# ======================================================
+# Option 1: "default_hash"
+#      SimHash + LSH (+ optional Multi-probe) + geo distance
+#      (no extra dependencies)
+# ======================================================
+
+curator_default = JobCurator(
+    # Global parameters (used by all backends)
+    ratio=0.5,                     # keep ~50% of jobs
+    alpha=0.6,                     # quality vs diversity tradeoff
+    max_per_cluster_in_pool=3,     # max jobs per cluster entering pool
     backend="default_hash",
-    use_outlier_filter=False,   # set True to enable IsolationForest
-    outlier_contamination=0.05, # used only if use_outlier_filter=True
+    use_outlier_filter=False,      # set True to enable IsolationForest (if sklearn installed)
+    outlier_contamination=0.05,    # only used when use_outlier_filter=True
 
-    # Hashing-specific parameters for default_hash
-    d_sim_threshold=20,         # SimHash Hamming distance threshold
-    max_cluster_distance_km=150.0,  # max geo distance (km) within a cluster
+    # Backend-specific: default_hash
+    d_sim_threshold=20,            # max Hamming distance on SimHash
+    max_cluster_distance_km=50.0,  # max geo distance (km) within a cluster
+    # jaccard_threshold is ignored by default_hash
+
+    # Multi-probe LSH (used by default_hash + minhash_hash)
+    use_multiprobe=True,
+    max_multiprobe_flips=1,        # small value = light extra recall
 )
 
-#   - Option 2: "sklearn_hash" : HashingVectorizer + NearestNeighbors (needs scikit-learn)
 
-# requires: pip install scikit-learn
+# ======================================================
+# Option 2: "minhash_hash"
+#      MinHash + Jaccard LSH on shingles (text + cats + coarse loc + salary)
+#      + optional Multi-probe + geo distance
+#      (no extra dependencies)
+# ======================================================
+
+curator_minhash = JobCurator(
+    # Global parameters
+    ratio=0.5,
+    alpha=0.6,
+    max_per_cluster_in_pool=3,
+    backend="minhash_hash",
+    use_outlier_filter=False,
+    outlier_contamination=0.05,
+
+    # Backend-specific: minhash_hash
+    jaccard_threshold=0.8,         # min Jaccard similarity between jobs in a cluster
+    max_cluster_distance_km=50.0,  # geo radius (km) for clusters
+    # d_sim_threshold is ignored by minhash_hash
+
+    # Multi-probe LSH for MinHash bands
+    use_multiprobe=True,
+    max_multiprobe_flips=1,
+)
+
+
+# ======================================================
+# Option 3: "sklearn_hash"
+#      HashingVectorizer + NearestNeighbors (cosine radius)
+#      (requires scikit-learn)
+# ======================================================
+
+# pip install scikit-learn
 curator_sklearn = JobCurator(
     # Global parameters
     ratio=0.5,
     alpha=0.6,
     max_per_cluster_in_pool=3,
     backend="sklearn_hash",
-    use_outlier_filter=True,    # IsolationForest pre-filter
-    outlier_contamination=0.05, # proportion of jobs flagged as outliers
+    use_outlier_filter=True,       # enable IsolationForest pre-filter
+    outlier_contamination=0.05,    # proportion of jobs flagged as outliers
 
-    # Hashing-specific params: none for sklearn_hash
-    # d_sim_threshold and max_cluster_distance_km are not used by this backend
+    # Backend-specific:
+    # d_sim_threshold, max_cluster_distance_km, jaccard_threshold,
+    # use_multiprobe, max_multiprobe_flips are all ignored by sklearn_hash
 )
 
-#   - Option 3: "faiss_hash"   : FAISS on signature + 3D location + categories (needs faiss)
 
-# requires: pip install faiss-cpu
+# ======================================================
+# Option 4: "faiss_hash"
+#      FAISS on [signature bits + 3D location + category richness]
+#      (requires faiss-cpu)
+# ======================================================
+
+# pip install faiss-cpu
 curator_faiss = JobCurator(
     # Global parameters
     ratio=0.5,
@@ -205,15 +256,16 @@ curator_faiss = JobCurator(
     use_outlier_filter=False,
     outlier_contamination=0.05,
 
-    # Hashing-specific parameters for faiss_hash
-    d_sim_threshold=20,         # distance threshold in FAISS vector space
-    # max_cluster_distance_km is not used in faiss backend
+    # Backend-specific: faiss_hash
+    d_sim_threshold=20,            # approx max L2 distance in FAISS space
+    # max_cluster_distance_km, jaccard_threshold, use_multiprobe,
+    # max_multiprobe_flips are ignored by faiss_hash
 )
+
 
 # 3) Compute the results
 
-
-compressed_jobs = curator.dedupe_and_compress(jobs)
+compressed_jobs = curator_default.dedupe_and_compress(jobs)
 
 print(f"{len(jobs)} → {len(compressed_jobs)} jobs kept")
 for j in compressed_jobs:
@@ -337,6 +389,18 @@ Available backends:
   * Uses categories and salary in the composite signature.
   * Pure Python, no external dependencies.
 
+* **`minhash_hash`**
+
+  * MinHash over **shingles** built from:
+
+    * text (word n-grams),
+    * categories,
+    * coarse location bucket,
+    * salary bucket.
+  * Jaccard similarity + LSH (banding) + optional Multi-probe.
+  * Optional geo distance filter (same `max_cluster_distance_km` as `default_hash`).
+  * Pure Python, no external deps.
+
 * **`sklearn_hash`**
 
   * Uses `scikit-learn`:
@@ -357,7 +421,6 @@ Available backends:
   * Designed for large-scale catalogs (fast nearest-neighbor search).
 
   * Requires: `pip install faiss-cpu`.
-
 
 ---
 

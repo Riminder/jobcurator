@@ -16,6 +16,8 @@ from .hash_utils import (
     hamming_distance,
     build_clusters_with_lsh,
 )
+
+from .minhash_backends import minhash_hash_clusters
 from .sklearn_backends import (
     sklearn_hash_clusters,
     filter_outliers,
@@ -26,23 +28,131 @@ from .faiss_backends import faiss_hash_clusters
 @dataclass
 class JobCurator:
     """
-    Main entrypoint for dedupe + compression.
+    Main entrypoint for job deduplication + compression with diversity.
 
-    backend:
-      - "default_hash" : SimHash + LSH (default)
-      - "sklearn_hash" : HashingVectorizer + NearestNeighbors (scikit-learn)
-      - "faiss_hash"   : FAISS on hash-based signature + 3D location + categories
+    Backends
+    --------
+    `backend` controls which clustering / hashing strategy is used:
+
+      - "default_hash"
+          SimHash + LSH (with optional Multi-probe) on text, plus 3D geo distance
+          and meta-hash (categories, salary, location). Pure Python.
+
+      - "minhash_hash"
+          MinHash + Jaccard LSH on shingles built from text, categories,
+          coarse location and salary. Optional Multi-probe + 3D geo distance.
+          Pure Python.
+
+      - "sklearn_hash"
+          HashingVectorizer + NearestNeighbors (cosine radius) over text +
+          encoded 3D location + category tokens. Optional IsolationForest
+          for outlier filtering. Requires scikit-learn.
+
+      - "faiss_hash"
+          FAISS IndexFlatL2 on composite vectors
+          [signature bits + normalized (x,y,z) + category richness].
+          Designed for large-scale catalogs. Requires faiss-cpu.
+
+
+    Global parameters (all backends)
+    --------------------------------
+    ratio : float
+        Target compression ratio in [0, 1].
+        Example: ratio = 0.4 → keep ~40% of jobs after dedupe + selection.
+
+    alpha : float
+        Trade-off between quality and diversity in the final greedy selection:
+            score = alpha * quality + (1 - alpha) * diversity
+        where diversity is based on Hamming distance between signatures.
+
+    max_per_cluster_in_pool : int
+        Maximum number of jobs taken from each cluster into the global
+        candidate pool before the diversity-aware selection.
+
+    backend : {"default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"}
+        Which clustering / hashing backend to use.
+
+    use_outlier_filter : bool
+        When True (and scikit-learn is installed), runs an IsolationForest-based
+        outlier filter on numeric features BEFORE clustering. Applies to any
+        backend. When False, no outlier filtering is performed.
+
+    outlier_contamination : float
+        Proportion of expected outliers for IsolationForest when
+        use_outlier_filter=True. Ignored otherwise.
+
+
+    Backend-specific parameters
+    ---------------------------
+
+    d_sim_threshold : int
+        Similarity / distance threshold for some backends:
+
+          - "default_hash":
+              Maximum Hamming distance on the SimHash (64-bit) part of
+              the composite signature to consider two jobs as near-duplicates.
+
+          - "faiss_hash":
+              Approximate maximum L2 distance in FAISS space to connect jobs
+              in the same cluster.
+
+          - "minhash_hash", "sklearn_hash":
+              Ignored.
+
+    max_cluster_distance_km : float
+        Maximum allowed 3D geo distance (in kilometers) between jobs in
+        the same cluster:
+
+          - used by "default_hash" and "minhash_hash",
+          - ignored by "sklearn_hash" and "faiss_hash".
+
+    jaccard_threshold : float
+        ONLY used by the "minhash_hash" backend.
+        Minimum Jaccard similarity (in [0, 1]) between two jobs’ shingle sets
+        for them to be connected in the same cluster.
+        Ignored by "default_hash", "sklearn_hash", and "faiss_hash".
+
+
+    Multi-probe LSH (default_hash / minhash_hash)
+    ---------------------------------------------
+
+    use_multiprobe : bool
+        When True, enables Multi-probe LSH:
+
+          - "default_hash":
+              Probes neighboring buckets in SimHash LSH by flipping bits
+              in band keys.
+
+          - "minhash_hash":
+              Probes neighboring buckets in MinHash band hashes (hashed bands).
+
+          - "sklearn_hash", "faiss_hash":
+              Ignored.
+
+    max_multiprobe_flips : int
+        When use_multiprobe=True, controls how many bit flips are used to
+        generate neighboring bucket keys (higher = more recall, more CPU).
+        Used by "default_hash" and "minhash_hash".
+        Ignored by "sklearn_hash" and "faiss_hash".
     """
+
+    # 🌍 Global parameters (all backends)
     ratio: float = 1.0
     alpha: float = 0.6
     max_per_cluster_in_pool: int = 3
-    d_sim_threshold: int = 20
-    max_cluster_distance_km: float = 150.0
-
-    backend: Literal["default_hash", "sklearn_hash", "faiss_hash"] = "default_hash"
-
+    backend: Literal["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"] = "default_hash"
     use_outlier_filter: bool = False
     outlier_contamination: float = 0.05
+
+    # 🎯 Backend-specific thresholds
+    d_sim_threshold: int = 20
+    max_cluster_distance_km: float = 50.0
+    jaccard_threshold: float = 0.8  # ∈ [0,1], only for minhash_hash
+
+    # 🔍 Multi-probe LSH controls
+    use_multiprobe: bool = False
+    max_multiprobe_flips: int = 1
+
 
     def dedupe_and_compress(self,
                             jobs: List[Job],
@@ -98,6 +208,18 @@ class JobCurator:
                 unique_jobs,
                 d_sim_threshold=self.d_sim_threshold,
                 max_cluster_distance_km=self.max_cluster_distance_km,
+                use_multiprobe=self.use_multiprobe,
+                max_multiprobe_flips=self.max_multiprobe_flips,
+            )
+        elif self.backend == "minhash_hash":
+            clusters = minhash_hash_clusters(
+                unique_jobs,
+                num_perm=64,  # nombre de permutations MinHash → longueur de la signature
+                bands=8,  # nombre de bandes pour le LSH Jaccard
+                jaccard_threshold=self.jaccard_threshold,
+                max_cluster_distance_km=self.max_cluster_distance_km,
+                use_multiprobe=self.use_multiprobe,
+                max_multiprobe_flips=self.max_multiprobe_flips,
             )
         elif self.backend == "sklearn_hash":
             clusters = sklearn_hash_clusters(unique_jobs)
