@@ -13,7 +13,10 @@
    - Deduplicates using **hashing** (exact hash + SimHash + LSH / sklearn / FAISS)
    - Scores jobs by **length & completion** (and optional freshness/source)
    - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
-   - Respects a global **compression ratio** (e.g. keep 40% of jobs)
+   - Respects a global **compression ratio** (e.g. keep 40% of jobs) while prioritizing quality and diversity
+   - Supports **incremental pipelines** (see the [Advanced documentation](README_ADVANCED.md):
+      - process batches over time (jobs₁, jobs₂, …)
+      - uses a CuckooFilter + pluggable storage (SQL or local files) to avoid re-ingesting old jobs
 
 ### ⚖️ Backends comparison
 
