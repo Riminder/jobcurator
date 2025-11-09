@@ -68,6 +68,34 @@ jobcurator/
       ├─ faiss_backends.py
       └─ curator.py
 ```
+```yaml
+jobcurator/
+├── pyproject.toml
+├── README.md                 # main intro, installation, backends, examples
+├── README_ADVANCED.md        # incremental pipelines + data model (advanced doc)
+├── LICENSE
+├── .gitignore
+├── test.py                   # unit tests for JobCurator (single batch)
+├── test_incremental.py       # CLI demo for incremental pipeline (local/sql)
+│
+├── src/
+│   └── jobcurator/
+│       ├── __init__.py        # exports JobCurator, Job, Category, etc.
+│       ├── models.py          # Job, Category, Location3DField, SalaryField
+│       ├── curator.py         # JobCurator class (dedupe + compression)
+│       ├── hash_utils.py      # SimHash, MinHash, LSH, distances, signatures
+│       ├── cuckoo_filter.py   # CuckooFilter implementation
+│       ├── sklearn_backend.py # sklearn_hash backend helpers (if used)
+│       ├── faiss_backend.py   # faiss_hash backend helpers (if used)
+│       └── storage/
+│           ├── __init__.py
+│           ├── base.py        # LightJob, StoreDB, process_batch, global_reselect
+│           ├── sql_store.py   # SqlStoreDB (compressed_jobs + dedupe_state tables)
+│           └── local_store.py # LocalFileStoreDB (JSONL + pickle)
+│
+└── tests/
+    └── __init__.py
+```
 
 ---
 
