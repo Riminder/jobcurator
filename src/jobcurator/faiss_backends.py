@@ -7,16 +7,10 @@ from .models import Job
 from .hash_utils import flatten_category_tokens
 
 
-try:
-    import numpy as np # type: ignore
-except ImportError as e:  # pragma: no cover
-    raise RuntimeError(
-        "numpy is required for hashing. Install with: pip install numpy"
-    ) from e
-
 
 _HAS_FAISS = True
 try:
+    import numpy as np # type: ignore
     import faiss  # type: ignore
 except ImportError:  # pragma: no cover
     _HAS_FAISS = False
@@ -25,6 +19,7 @@ except ImportError:  # pragma: no cover
 def _ensure_faiss():
     if not _HAS_FAISS:
         raise RuntimeError(
+            "numpy is required for hashing. Install with: pip install numpy. "
             "faiss is required for this backend. Install it with 'pip install faiss-cpu' "
             "or the appropriate FAISS package for your platform."
         )
