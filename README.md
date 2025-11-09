@@ -129,7 +129,7 @@ from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField
 from datetime import datetime
 ```
 
-### Example usage
+### Basic Example usage
 
 
 
@@ -280,6 +280,39 @@ compressed_jobs = curator_default.dedupe_and_compress(jobs)
 print(f"{len(jobs)} → {len(compressed_jobs)} jobs kept")
 for j in compressed_jobs:
     print(j.id, j.title, j.location.city, f"quality={j.quality:.3f}")
+
+```
+### Incremental JobCURATOR
+
+* SQL store
+```python
+from jobcurator import JobCurator
+from jobcurator.storage import SqlStoreDB, process_batch, global_reselect_in_store
+import psycopg2
+
+conn = psycopg2.connect("dbname=... user=... password=... host=...")
+store = SqlStoreDB(conn)
+
+curator = JobCurator(backend="default_hash", ratio=0.5, alpha=0.6)
+
+compressed_jobs1 = process_batch(store, jobs1, curator)
+compressed_jobs2 = process_batch(store, jobs2, curator)
+
+global_reselect_in_store(store, ratio=0.5, alpha=0.6)
+```
+* Local store
+```python
+from jobcurator import JobCurator
+from jobcurator.storage import LocalFileStoreDB, process_batch, global_reselect_in_store
+
+store = LocalFileStoreDB()
+
+curator = JobCurator(backend="default_hash", ratio=0.5, alpha=0.6)
+
+compressed_jobs1 = process_batch(store, jobs1, curator)
+compressed_jobs2 = process_batch(store, jobs2, curator)
+
+global_reselect_in_store(store, ratio=0.5, alpha=0.6)
 
 ```
 
@@ -437,7 +470,7 @@ Available backends:
 
 ## ⚙️ How It Works (High Level)
 
-1. **Preprocessing & scoring**
+### 1. **Preprocessing & scoring**
 
    - Compute token length of `title + text` → normalize to `length_score ∈ [0,1]` using p10/p90 percentiles.
    - Compute `completion_score` based on presence of key fields: title, text, location, salary, categories, company, contract_type.
@@ -451,7 +484,7 @@ Available backends:
                 + 0.1 * source_quality
      ```
 
-2. **Approximate “seen before” filter (CuckooFilter)**
+### 2. **Approximate “seen before” filter (CuckooFilter)**
 
    - Optionally use an internal **CuckooFilter** to track jobs across runs or batches.
    - For each job:
@@ -459,7 +492,7 @@ Available backends:
      - Otherwise → `add(exact_hash(j))` to the filter and keep the job.
    - This avoids re-processing jobs that have already been seen.
 
-3. **Exact hash dedup (strict duplicates)**
+### 3. **Exact hash dedup (strict duplicates)**
 
    - Build a canonical string from:
      - normalized title,
@@ -470,7 +503,7 @@ Available backends:
    - Hash with `blake2b` into a 64-bit `exact_hash`.
    - Keep only one job per `exact_hash` (hard dedup).
 
-4. **Composite signature (no embeddings)**
+### 4. **Composite signature (no embeddings)**
 
    For each job, build a 128-bit `signature`:
 
@@ -484,11 +517,11 @@ Available backends:
 
    This signature is used by the different backends.
 
-5. **Clustering (backend-dependent)**
+### 5. **Clustering (backend-dependent)**
 
    Depending on `backend`:
 
-   ### a. `backend="default_hash"` – SimHash + Multi-probe LSH + geo
+   #### a. `backend="default_hash"` – SimHash + Multi-probe LSH + geo
 
    - Take the **SimHash** part of the signature (64 bits).
    - Split into bands → Locality Sensitive Hashing.
@@ -500,7 +533,7 @@ Available backends:
      - 3D geo distance between locations ≤ `max_cluster_distance_km`
    - Use union–find to build clusters.
 
-   ### b. `backend="sklearn_hash"` – HashingVectorizer + NearestNeighbors
+   #### b. `backend="sklearn_hash"` – HashingVectorizer + NearestNeighbors
 
    - Build text features with `HashingVectorizer` over:
      - title + text,
@@ -509,7 +542,7 @@ Available backends:
    - Use `NearestNeighbors` (cosine radius) to connect jobs that are close in this hashed feature space.
    - Connected components form clusters.
 
-   ### c. `backend="faiss_hash"` – FAISS on signature + 3D loc + categories
+   #### c. `backend="faiss_hash"` – FAISS on signature + 3D loc + categories
 
    - For each job, build a numeric vector:
 
@@ -521,12 +554,12 @@ Available backends:
    - For each job, query its nearest neighbors; pairs with distance ≤ `d_sim_threshold` are connected.
    - Connected components become clusters.
 
-6. **Intra-cluster ranking**
+### 6. **Intra-cluster ranking**
 
    - Inside each cluster, sort jobs by `quality` (descending).
    - For each cluster, keep only the top `max_per_cluster_in_pool` jobs as candidates.
 
-7. **Global compression with diversity**
+### 7. **Global compression with diversity**
 
    - Merge all per-cluster candidates into a global pool and deduplicate by `id`.
    - Sort the pool by `quality` (descending).
@@ -550,10 +583,32 @@ Available backends:
      ```
 
    Result: you keep **fewer, higher-quality, and more diverse** jobs, while avoiding duplicates (strict + near-duplicates), and optionally skipping already-seen jobs via **CuckooFilter**.
-````
 
 ---
 
+ ## 🛠️ Advanced (High Level)
+
+ ### **Incremental Jobcurator Approach**
+
+Problem:
+You often receive **batches of jobs over time** (`jobs1`, `jobs2`, …) and want to:
+
+* Avoid re-ingesting duplicates/near-duplicates from past batches.
+* Maintain a **global compressed set** across all batches with a fixed or target ratio.
+* Not reload all previous jobs into memory each time.
+
+The solution is:
+
+1. Use a global **CuckooFilter** to remember “seen” jobs (by exact hash).
+2. Use a pluggable **`StoreDB`** to store compressed jobs + CuckooFilter state.
+3. Use:
+
+   * `process_batch(StoreDB, jobs, JobCurator)` for incremental batches
+   * `global_reselect_in_store(StoreDB, ratio, alpha)` for global rebalancing
+
+For more details, see the [Advanced documentation](README_ADVANCED.md).
+
+---
 
 ## 🤝 Contributing
 

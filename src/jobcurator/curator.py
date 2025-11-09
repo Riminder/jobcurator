@@ -134,6 +134,16 @@ class JobCurator:
         generate neighboring bucket keys (higher = more recall, more CPU).
         Used by "default_hash" and "minhash_hash".
         Ignored by "sklearn_hash" and "faiss_hash".
+
+    
+    For incremental SQL / local-file usage.
+    ---------------------------------------------
+
+    See also:
+        jobcurator.storage.process_batch
+        jobcurator.storage.SqlStoreDB
+        jobcurator.storage.LocalFileStoreDB
+
     """
 
     # 🌍 Global parameters (all backends)
@@ -214,8 +224,8 @@ class JobCurator:
         elif self.backend == "minhash_hash":
             clusters = minhash_hash_clusters(
                 unique_jobs,
-                num_perm=64,  # nombre de permutations MinHash → longueur de la signature
-                bands=8,  # nombre de bandes pour le LSH Jaccard
+                num_perm=64,  # number of MinHah permutations → signature length
+                bands=8,  # number of bands for the LSH Jaccard
                 jaccard_threshold=self.jaccard_threshold,
                 max_cluster_distance_km=self.max_cluster_distance_km,
                 use_multiprobe=self.use_multiprobe,
