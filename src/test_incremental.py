@@ -214,11 +214,18 @@ def main() -> None:
                 "(e.g. 'dbname=... user=... password=... host=...')"
             )
 
-        import psycopg2  # user is responsible for installing psycopg2
+        try:
+            import psycopg2 # type: ignore # user is responsible for installing psycopg2
+
+        except ImportError as e:  # pragma: no cover
+            raise RuntimeError(
+                "psycopg2 is required for SQL storage. Install with: pip install psycopg2"
+            ) from e
 
         conn = psycopg2.connect(args.dsn)
         store = SqlStoreDB(conn)
         print("[info] Using SqlStoreDB with DSN:", args.dsn)
+
 
     # -----------------------------------------------------------------------
     # Configure JobCurator
