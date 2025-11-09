@@ -408,7 +408,7 @@ def build_clusters_with_lsh(
     sim_bits: int = 64,
     bands: int = 8,
     d_sim_threshold: int = 20,
-    max_cluster_distance_km: float = 150.0,
+    max_cluster_distance_km: float = 50.0,
     use_multiprobe: bool = False,
     max_multiprobe_flips: int = 1,
 ) -> List[List[Job]]:

@@ -164,34 +164,40 @@ class JobCurator:
     max_multiprobe_flips: int = 1
 
 
-    def dedupe_and_compress(self,
-                            jobs: List[Job],
-                            ratio: Optional[float] = None) -> List[Job]:
+    def dedupe_and_compress(
+    self,
+    jobs: List[Job],
+    ratio: Optional[float] = None) -> List[Job]:
+        """
+        Deduplicate + cluster + compress with diversity-aware greedy selection.
+        The effective keep-count is computed on the candidate pool (post-dedupe).
+        """
+        # -------- input & early guards --------
         r = self.ratio if ratio is None else ratio
-
-        if r >= 1.0:
-            return list(jobs)
-        if r <= 0.0:
-            return []
         if not jobs:
             return []
+        if r is None or math.isnan(r):
+            r = 1.0
+        if r <= 0.0:
+            return []
+        if r >= 1.0:
+            # Still do exact-hash dedupe if you prefer; otherwise return as-is
+            return list(jobs)
 
-        # Optional outlier filtering
+        # Optional outlier filtering (only if explicitly enabled)
         if self.use_outlier_filter:
+            # filter_outliers already imported; if sklearn isn't available,
+            # your filter_outliers impl should gracefully no-op or raise.
             jobs = filter_outliers(jobs, contamination=self.outlier_contamination)
             if not jobs:
                 return []
 
-        N_original = len(jobs)
-        K = math.ceil(N_original * r)
-
-        # 1) length stats
+        # -------- per-item stats & signatures --------
         lengths = [compute_token_length(j) for j in jobs]
         lengths_sorted = sorted(lengths)
         p10 = percentile(lengths_sorted, 0.10)
         p90 = percentile(lengths_sorted, 0.90)
 
-        # 2) compute internal scores + hashes
         for job, l in zip(jobs, lengths):
             job.length_tokens = l
             job.length_score = length_score(l, p10, p90)
@@ -200,10 +206,11 @@ class JobCurator:
             job.exact_hash = build_exact_hash(job)
             job.signature = composite_signature(job)
 
-        # 3) exact dedup
-        seen_exact: Dict[int, str] = {}
+        # -------- exact dedup --------
+        seen_exact: Dict[str, str] = {}
         unique_jobs: List[Job] = []
         for job in jobs:
+            # skip duplicate exact hashes, keep the first / highest quality (we sort clusters later)
             if job.exact_hash in seen_exact:
                 continue
             seen_exact[job.exact_hash] = job.id
@@ -212,7 +219,7 @@ class JobCurator:
         if not unique_jobs:
             return []
 
-        # 4) clusters: choose backend
+        # -------- clustering (backend switch) --------
         if self.backend == "default_hash":
             clusters = build_clusters_with_lsh(
                 unique_jobs,
@@ -224,8 +231,8 @@ class JobCurator:
         elif self.backend == "minhash_hash":
             clusters = minhash_hash_clusters(
                 unique_jobs,
-                num_perm=64,  # number of MinHah permutations → signature length
-                bands=8,  # number of bands for the LSH Jaccard
+                num_perm=64,               # number of MinHash permutations (signature length)
+                bands=8,                   # number of LSH bands
                 jaccard_threshold=self.jaccard_threshold,
                 max_cluster_distance_km=self.max_cluster_distance_km,
                 use_multiprobe=self.use_multiprobe,
@@ -243,35 +250,54 @@ class JobCurator:
         else:  # pragma: no cover
             raise ValueError(f"Unknown backend: {self.backend}")
 
-        # 5) rank inside clusters by quality
+        # If no clusters formed, bail early
+        if not clusters:
+            return []
+
+        # -------- rank within clusters by quality --------
         for C in clusters:
             C.sort(key=lambda j: j.quality, reverse=True)
 
-        # 6) candidate pool
+        # -------- candidate pool (cap per cluster) --------
         pool: List[Job] = []
         for C in clusters:
-            pool.extend(C[: self.max_per_cluster_in_pool])
+            if C:
+                pool.extend(C[: self.max_per_cluster_in_pool])
 
-        pool_dict: Dict[str, Job] = {j.id: j for j in pool}
-        pool = list(pool_dict.values())
+        # Remove accidental dupes by id (can happen if backends overlap edges)
         if not pool:
             return []
+        pool = list({j.id: j for j in pool}.values())
 
-        # 7) diversity-aware greedy selection
+        # -------- determine K on the actual pool --------
+        K = max(1, math.ceil(len(pool) * r))
+        if K >= len(pool):
+            # nothing to compress—return pool as-is in quality order
+            return sorted(pool, key=lambda j: j.quality, reverse=True)
+
+        # -------- diversity-aware greedy selection --------
         pool.sort(key=lambda j: j.quality, reverse=True)
         selected: List[Job] = []
 
+        # seed with the best quality
         first = pool.pop(0)
         selected.append(first)
 
+        # clamp alpha to [0,1] to avoid surprises
         alpha = self.alpha
+        if alpha < 0.0:
+            alpha = 0.0
+        elif alpha > 1.0:
+            alpha = 1.0
 
         while len(selected) < K and pool:
+            # compute each candidate's min Hamming distance to any selected
             dmins = []
             for x in pool:
                 dmin = min(hamming_distance(x.signature, s.signature) for s in selected)
                 dmins.append((x, dmin))
 
+            # normalize diversity to [0,1] for stability
             dvals = [d for _, d in dmins]
             dmin_val, dmax_val = min(dvals), max(dvals)
             span = max(dmax_val - dmin_val, 1)
@@ -280,18 +306,18 @@ class JobCurator:
             best_score = -1.0
             for x, d in dmins:
                 diversity = (d - dmin_val) / span
-                score = alpha * x.quality + (1 - alpha) * diversity
+                score = alpha * x.quality + (1.0 - alpha) * diversity
                 if score > best_score:
                     best_score = score
                     best_x = x
 
+            # safety: best_x should exist since pool not empty
             selected.append(best_x)
             pool.remove(best_x)
 
+        # if we still need to fill due to ties/rounding, top up by quality
         if len(selected) < K and pool:
-            for x in pool:
-                if len(selected) >= K:
-                    break
-                selected.append(x)
+            pool.sort(key=lambda j: j.quality, reverse=True)
+            selected.extend(pool[: (K - len(selected))])
 
         return selected
