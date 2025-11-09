@@ -163,7 +163,7 @@ def process_batch(
     # 2) Run JobCurator
     compressed = curator.dedupe_and_compress(
         jobs,
-        approx_seen_filter=seen_filter,
+        seen_filter=seen_filter,
     )
 
     # 3) Persist compressed jobs

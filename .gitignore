@@ -11,6 +11,19 @@ dist/
 pip-wheel-metadata/
 .wheelhouse/
 
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Outils
+.pytest_cache/
+.mypy_cache/
+.cache/
+.coverage
+htmlcov/
+
 # --- Virtual environments / Python env managers ---
 .venv/
 venv/
@@ -80,6 +93,9 @@ tmp/
 *.key
 *.pem
 
-# --- Docs build output (if any) ---
+# --- Docs build output ---
+docs/_build/
 site/
 builddocs/
+
+
