@@ -4,8 +4,41 @@
 </div>
 
 
+
 # ℹ️ Welcome to the `jobcurator` library
 `jobcurator` is an open-source Machine Learning library to clean, normalize, structure, compress, and sample large datasets & feeds of job offers.
+
+### 📬 Contact
+
+For questions, ideas, or coordination around larger changes:
+
+**Primary maintainer**
+📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
+
+## 📚 Table of Contents
+
+- [ℹ️ About the `jobcurator` library](#ℹ️-about-the-jobcurator-library)
+  - [Available features](#-available-features)
+  - [Backends comparison](#️-backends-comparison)
+  - [TODO](#-todo)
+  - [Contact](#-contact)
+- [Repository structure](#-repository-structure)
+- [Installation](#-installation)
+- [Testing code](#-testing-code)
+- [Public API](#-public-api)
+  - [Basic example usage](#basic-example-usage)
+  - [Incremental JobCurator](#incremental-jobcurator)
+- [Core Concepts](#-core-concepts)
+- [Advanced (High Level)](#-advanced-high-level)
+  - [Incremental Jobcurator Approach](#incremental-jobcurator-approach)
+- [Contributing](#-contributing)
+  - [Getting Started](#-getting-started)
+  - [Reporting Bugs](#-reporting-bugs)
+  - [Suggesting Features](#-suggesting-features)
+  - [Tests & Quality](#-tests--quality)
+  - [Code Style & Guidelines](#-code-style--guidelines)
+  - [Public API & Backward Compatibility](#-public-api--backward-compatibility)
+  - [Pull Requests](#-pull-requests)
 
 ### ✨ Available features:
 - Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
@@ -44,13 +77,6 @@ No dense text embeddings. Hash-based + classic ML only.
 - add Job Parsing
 - add Job dynamic Tagging with Taxonomy
 - add job auto-formating & Normalization
-
-## 📬 Contact
-
-For questions, ideas, or coordination around larger changes:
-
-**Primary maintainer**
-📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
 
 ---
 
