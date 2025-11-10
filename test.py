@@ -328,7 +328,7 @@ def main():
     )
 
     # Compute Stats
-    stats = curator.compute_stats(jobs)
+    stats = curator.compute_job_stats(jobs)
     print(f"Stats: {stats}")
 
     # Dedupe & Compress
