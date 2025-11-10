@@ -336,8 +336,8 @@ def main():
 
     # Print compression summary statistics
     curator.print_compression_summary(n_preview=n_preview, t_ms=t_ms)
-    curator.print_jobs_summary(curator.jobs, num_selected_to_show=n_preview, label="All jobs set")
-    curator.print_jobs_summary(compressed, num_selected_to_show=n_preview, label="compressed jobs set")
+    curator.print_jobs_summary(curator.jobs, n_preview=n_preview, label="All jobs set")
+    curator.print_jobs_summary(compressed, n_preview=n_preview, label="compressed jobs set")
 
 
 if __name__ == "__main__":

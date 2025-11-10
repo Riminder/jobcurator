@@ -649,8 +649,8 @@ class JobCurator:
         print(line("-"))
 
     @staticmethod
-    def print_jobs_summary(jobs, num_selected_to_show=10, label="jobs set"):
-        n_show = max(0, min(num_selected_to_show, len(jobs)))
+    def print_jobs_summary(jobs, n_preview=10, label="jobs set"):
+        n_show = max(0, min(n_preview, len(jobs)))
         rows = []
         for j in jobs[:n_show]:
             city = getattr(getattr(j, "location", None), "city", None) or "Unknown"

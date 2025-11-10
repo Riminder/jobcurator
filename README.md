@@ -45,15 +45,21 @@ For questions, ideas, or coordination around larger changes:
 📧 [mouhidine.seiv@hrflow.ai](mailto:mouhidine.seiv@hrflow.ai)
 
 ### ✨ Available features:
-- Hash-based job deduplication and compression with  **quality** and **diversity preservation**.
-`jobcurator` takes a list of structured job objects and:
-   - Deduplicates using **hashing** (exact hash + SimHash + LSH / sklearn / FAISS)
-   - Scores jobs by **length & completion** (and optional freshness/source)
-   - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
-   - Respects a global **compression ratio** (e.g. keep 40% of jobs) while prioritizing quality and diversity
-   - Supports **incremental pipelines** (see the [Advanced documentation](README_ADVANCED.md):
-      - process batches over time (jobs₁, jobs₂, …)
-      - uses a CuckooFilter + pluggable storage (SQL or local files) to avoid re-ingesting old jobs
+- `dedupe_and_compress` is a Hash-based job deduplication and compression fuction with  **quality** and **diversity preservation**. It takes a list of
+  structured job objects and:
+  - Deduplicates using **hashing** (exact hash + SimHash + LSH / sklearn / FAISS)
+  - Scores jobs by **length & completion** (and optional freshness/source)
+  - Preserves **variance** by keeping jobs that are **far apart** in hash/signature space
+  - Respects a global **compression ratio** (e.g. keep 40% of jobs) while prioritizing quality and diversity
+  - Greedy diversity selection: optional post-selection pass that recomputes diversity scores on the final set using robust quantile scaling and 
+    (optionally) soft-min.
+- Print helpers:
+  - `print_compression_summary()` → compact, ASCII table with length/quality stats.
+  - `print_jobs_summary()` → preview of top-N selected jobs with Quality / Diversity / Selection.
+- `process_batch` Supports **incremental pipelines** (see the [Advanced documentation](README_ADVANCED.md):
+  - process batches over time (jobs₁, jobs₂, …)
+  - uses a CuckooFilter + pluggable storage (SQL or local files) to avoid re-ingesting old jobs
+    
 
 ### ⚖️ Backends comparison
 
@@ -175,7 +181,6 @@ from datetime import datetime
 ```
 
 ### Basic Jobcurator
-
 
 
 ```python
@@ -327,6 +332,39 @@ for j in compressed_jobs:
     print(j.id, j.title, j.location.city, f"quality={j.quality:.3f}")
 
 ```
+
+### Print helpers
+```python
+curator_default.print_compression_summary(n_preview=10, t_ms=elapsed_ms)
+curator_default.print_jobs_summary(selected, n_preview=10, label="Selected")
+```
+
+#### 1) `print_compression_summary(n_preview: int = 0, t_ms: float = 0.0)`
+
+Shows the effective keep ratio, backend, timing, and an ASCII table of length/quality stats for **all** vs **selected**.
+
+**Example output**
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  🔎 preview: 10 | 🎯 ratio: 0.40 | 🧠 backend: default_hash | ⏱️  time: 82.4 ms │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+Total jobs: 12000 | Selected: 4800 (40.0% kept)
++----------+-------+--------+--------+--------+--------+
+| Dataset  | Count |  Len μ |  Len σ | Qual μ | Qual σ |
++==========+=======+========+========+========+========+
+| All jobs | 12000 |  92.14 |  37.21 | 0.644  | 0.112  |
+| Selected |  4800 | 106.38 |  29.07 | 0.711  | 0.087  |
++----------+-------+--------+--------+--------+--------+
+```
+
+#### 2) `print_jobs_summary(jobs, num_selected_to_show=10, label="jobs set")`
+
+Previews the top-N by **current order** (you can pass `curator.selected_jobs`) with per-row Quality / Diversity / Selection and a short canonical hash.
+
+**Columns**: `ID | Title | City | Quality | Diversity | Selection | Hash`
+
 ### Incremental JobCURATOR
 
 * SQL store
@@ -457,6 +495,19 @@ JobCurator(
 * `ratio = 1.0` → keep all jobs
 * `ratio = 0.5` → keep ~50% of jobs (highest quality + diversity)
 * `alpha` closer to 1 → prioritize quality; closer to 0 → prioritize diversity
+
+More params: 
+| Param                     | Where                                       | Type          | Default          | Description                                                                                        |
+| ------------------------- | ------------------------------------------- | ------------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| `ratio`                   | `JobCurator(...)` / `dedupe_and_compress()` | float ∈ [0,1] | `1.0`            | Target keep ratio after dedupe + selection.                                                        |
+| `alpha`                   | `JobCurator(...)`                           | float ∈ [0,1] | `0.6`            | Trade-off in `selection_score`.                                                                    |
+| `greedy_diversity`        | `dedupe_and_compress()`                     | bool          | `False`          | Recompute diversity on the final set with robust scaling (recommended for quality-sensitive runs). |
+| `max_per_cluster_in_pool` | `JobCurator(...)`                           | int           | `3`              | Cap per cluster before global selection.                                                           |
+| `backend`                 | `JobCurator(...)`                           | literal       | `"default_hash"` | Hashing/clustering strategy.                                                                       |
+| `use_outlier_filter`      | `JobCurator(...)`                           | bool          | `False`          | Optional IsolationForest pre-filter.                                                               |
+| `d_sim_threshold`         | `JobCurator(...)`                           | int           | `20`             | Hamming/L2 threshold (backend-specific).                                                           |
+| `jaccard_threshold`       | `JobCurator(...)`                           | float         | `0.8`            | MinHash LSH threshold.                                                                             |
+
 
 ---
 
@@ -636,6 +687,72 @@ Available backends:
 ---
 
  ## 🛠️ Advanced (High Level)
+
+### 1. **Diversity–aware selection**
+
+During compression we score each candidate:
+
+```
+selection_score = α * quality + (1 - α) * diversity
+```
+
+* `quality` is computed per job (length, completion, etc.).
+* `diversity` is backend-aware:
+
+  * `default_hash`: normalized Hamming on 64-bit SimHash/composite signature
+  * `minhash_hash`: 1 − Jaccard (from MinHash)
+  * `sklearn_hash`: cosine distance
+  * `faiss_hash`: cosine distance on composite vectors
+
+#### a. Greedy pass (fast)
+
+While selecting, we compute each job’s **min distance to any already-selected** item, then **robust-scale** distances with quantiles *(q_lo=0.10, q_hi=0.90)* and **label smoothing** *(ε=0.02)* to avoid hard 0/1:
+
+```
+z = clamp01( (d - q10) / (q90 - q10 + 1e-6) )
+diversity = ε + (1 - 2ε) * z
+```
+
+> Seed item gets `diversity_score = 1.0` (helps robust scaling).
+
+#### b. Greedy diversity re-compute (optional, slower, more faithful)
+
+If you pass `greedy_diversity=True`, we run `recompute_diversity_scores()` on the **final** selected set:
+
+* Compute pairwise distance matrix `[0,1]`.
+* Per item, compute either:
+
+  * **k-NN mean** of the *k* closest distances *(default k=3)*, or
+  * **soft-min** with temperature τ *(smaller τ → closer to hard min)*.
+* Apply **robust quantile scaling** (q_lo, q_hi), then a **leave-one-out (LOO)** contribution:
+
+  * `final_div = 0.5 * local_scaled + 0.5 * loo_scaled`
+* Rebuild `selection_score` with same α.
+
+**Knobs** (in `recompute_diversity_scores`):
+
+* `k_nn=3`, `q_lo=0.10`, `q_hi=0.90`, `tau=0.15`, `label_eps=0.02`, `use_softmin=False`.
+
+```python
+selected = curator.dedupe_and_compress(
+    jobs,
+    ratio=0.4,                 # optional override
+    greedy_diversity=True,     # ← new
+    seen_filter=my_cuckoo,     # optional Bloom/Cuckoo/set-like
+)
+
+# Optional recalibration if you want to run it manually:
+curator.recompute_diversity_scores(
+    selected_jobs=selected,
+    alpha=curator.alpha,
+    distance_fn=curator._diversity_distance,
+    k_nn=3,
+    q_lo=0.10, q_hi=0.90,
+    tau=0.15,
+    label_eps=0.02,
+    use_softmin=False,
+)
+```
 
  ### **Incremental Jobcurator Approach**
 
