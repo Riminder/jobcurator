@@ -327,6 +327,11 @@ def main():
         max_multiprobe_flips=1,
     )
 
+    # Compute Stats
+    stats = curator.compute_stats(jobs)
+    print(f"Stats: {stats}")
+
+    # Dedupe & Compress
     compressed = curator.dedupe_and_compress(jobs, seen_filter=seen_filter)
 
     print(f"Total jobs: {total_jobs}")
