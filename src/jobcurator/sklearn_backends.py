@@ -108,6 +108,49 @@ def sklearn_hash_clusters(
     return list(clusters.values())
 
 
+def numerical_vector(self) -> List[float]:
+        """
+        Numeric feature vector for ML-based filters / stats:
+
+        - length_tokens
+        - completion_score_val
+        - quality
+        - avg salary
+        - 3D location (x,y,z)
+        - category richness (count of flattened tokens)
+        """
+        if self.location is not None:
+            self.location.compute_xyz()
+            x = self.location.x
+            y = self.location.y
+            z = self.location.z
+        else:
+            x = y = z = 0.0
+
+        sal = 0.0
+        if self.salary is not None:
+            vals = []
+            if self.salary.min_value is not None:
+                vals.append(self.salary.min_value)
+            if self.salary.max_value is not None:
+                vals.append(self.salary.max_value)
+            if vals:
+                sal = sum(vals) / len(vals)
+
+        cat_tokens = flatten_category_tokens(self)
+        cat_count = float(len(cat_tokens))
+
+        return [
+            float(self.length_tokens),
+            float(self.completion_score_val),
+            float(self.quality),
+            float(sal),
+            float(x),
+            float(y),
+            float(z),
+            cat_count,
+        ]
+    
 def filter_outliers(
     jobs: List[Job],
     contamination: float = 0.05,
@@ -120,7 +163,7 @@ def filter_outliers(
     if not jobs:
         return jobs
 
-    X = [j.numerical_vector(j) for j in jobs]
+    X = [numerical_vector(j) for j in jobs]
     iso = IsolationForest(
         contamination=contamination,
         random_state=0,
