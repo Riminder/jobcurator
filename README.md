@@ -63,7 +63,7 @@ For questions, ideas, or coordination around larger changes:
 
 ### ⚖️ Backends comparison
 
-| Capability / Feature        | `default_hash`                                  | `minhash_hash`                                  | `sklearn_hash`                                       | `faiss_hash`                                              |
+| Feature        | `default_hash`                                  | `minhash_hash`                                  | `sklearn_hash`                                       | `faiss_hash`                                              |
 |----------------------------|--------------------------------------------------|-------------------------------------------------|------------------------------------------------------|-----------------------------------------------------------|
 | **Algorithm**         | SimHash + LSH (± Multi-probe)                   | MinHash + Jaccard LSH (± Multi-probe)           | HashingVectorizer + NearestNeighbors (cosine)        | FAISS IndexFlatL2 on composite vectors                   |
 | **Similarity**        | Hamming cosine                           | Jaccard on token/shingle sets                   | Cosine distance                                      | L2 distance                                              |
