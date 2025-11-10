@@ -1,7 +1,8 @@
 import argparse
 from datetime import datetime
+from time import perf_counter
 
-from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField, CuckooFilter
+from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField, CuckooFilter, curator
 
 
 def build_jobs():
@@ -327,40 +328,16 @@ def main():
         max_multiprobe_flips=1,
     )
 
-    # Compute Stats
-    stats = curator.compute_job_stats(jobs)
-    print(f"Stats: {stats}")
-
     # Dedupe & Compress
+    from time import perf_counter
+    t0 = perf_counter()
     compressed = curator.dedupe_and_compress(jobs, seen_filter=seen_filter)
+    t_ms = (perf_counter() - t0) * 1000.0  # milliseconds
 
-    print(f"Total jobs: {total_jobs}")
-    print(f"n_preview_jobs = {n_preview}, ratio = {args.ratio}, backend = {args.backend}")
-    print(f"Compressed jobs: {len(compressed)}")
-
-    print("\n=== First n_preview_jobs original jobs ===")
-    for j in jobs[:n_preview]:
-        city = j.location.city or "Unknown"
-        print(f"- {j.id}: {j.title} @ {city}")
-
-    num_selected_to_show = int(n_preview * args.ratio)
-    if num_selected_to_show <= 0:
-        num_selected_to_show = 1
-    num_selected_to_show = min(num_selected_to_show, len(compressed))
-
-    print(f"\n=== Top {num_selected_to_show} jobs from compressed set ===")
-    for j in compressed[:num_selected_to_show]:
-        city = getattr(getattr(j, "location", None), "city", None) or "Unknown"
-        h_str = j.canonical_hash(4) or "NA"
-        q = getattr(j, "quality", None)
-        d = getattr(j, "diversity_score", None)
-        s = getattr(j, "selection_score", None)
-        q_str = f"{q:.3f}" if isinstance(q, (int, float)) else "NA"
-        d_str = f"{d:.3f}" if isinstance(d, (int, float)) else "NA"
-        s_str = f"{s:.3f}" if isinstance(s, (int, float)) else "NA"
-        print(f"- {j.id} | {j.title} @ {city} | quality={q_str} | diversity={d_str} | selection_score={s_str} | hash={h_str}")
-
-    #todo add diversity score and selection score
+    # Print compression summary statistics
+    curator.print_compression_summary(n_preview=n_preview, t_ms=t_ms)
+    curator.print_jobs_summary(curator.jobs, num_selected_to_show=n_preview, label="All jobs set")
+    curator.print_jobs_summary(compressed, num_selected_to_show=n_preview, label="compressed jobs set")
 
 
 if __name__ == "__main__":

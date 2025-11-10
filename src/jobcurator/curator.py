@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Literal
+from random import seed
+from typing import Dict, List, Optional, Literal, Callable
 import math
 from statistics import mean, pstdev
 
@@ -173,6 +174,9 @@ class JobCurator:
     use_multiprobe: bool = False
     max_multiprobe_flips: int = 1
 
+    jobs : List[Job] = None # all processed jobs after quality computation(in memory)
+    selected_jobs : List[Job] = None # selected jobs after dedupe_and_compress
+
     # --- seen-filter helpers (keep inside the curator) ---
     @staticmethod
     def _seen_contains(seen, key: str) -> bool:
@@ -201,6 +205,19 @@ class JobCurator:
         # best-effort no-op otherwise
         return
 
+    # --- robust percentiles instead of raw min/max ---
+    @staticmethod
+    def _quantile(xs, q: float) -> float:
+        if not xs:
+            return 0.0
+        q = 0.0 if q < 0.0 else (1.0 if q > 1.0 else q)  # clamp
+        s = sorted(xs)
+        pos = (len(s) - 1) * q
+        i = int(math.floor(pos))
+        j = min(i + 1, len(s) - 1)
+        frac = pos - i
+        return s[i] * (1.0 - frac) + s[j] * frac
+
     def _diversity_distance(self, a: Job, b: Job) -> float:
         """
         Return a distance in [0,1] depending on backend:
@@ -225,11 +242,138 @@ class JobCurator:
         return 0.0
 
 
+    def recompute_diversity_scores(
+        self,
+        selected_jobs: List[Job],
+        alpha: float,
+        distance_fn: Callable[[Job, Job], float],
+        *,
+        k_nn: int = 3,            # use average of k nearest neighbors (softer than min)
+        q_lo: float = 0.10,       # robust scaling lower percentile
+        q_hi: float = 0.90,       # robust scaling upper percentile
+        tau: float = 0.15,        # temperature for optional soft-min (smaller = closer to hard min)
+        label_eps: float = 0.02,  # label smoothing to avoid exact 0/1
+        use_softmin: bool = False # set True to use soft-min instead of k-NN mean
+    ) -> List[Job]:
+        """
+        Softer, robust diversity recompute:
+        - diversity_i = robust_scale( avg_kNN_i or softmin_i )
+        - LOO_i = robust_scale( drop_in_mean(avg_kNN) when removing i )
+        - final = 0.5 * diversity_i + 0.5 * LOO_i
+        - selection_score = alpha*quality + (1-alpha)*final
+        All distances are assumed in [0,1].
+        """
+
+        n = len(selected_jobs)
+        if n == 0:
+            return []
+        if n == 1:
+            j = selected_jobs[0]
+            j.diversity_score = 1.0 - label_eps
+            q = float(getattr(j, "quality", 0.0) or 0.0)
+            j.selection_score = alpha * q + (1.0 - alpha) * j.diversity_score
+            return [j]
+
+        # 1) Build symmetric distance matrix D (clamped to [0,1])
+        D = [[0.0]*n for _ in range(n)]
+        for i in range(n):
+            for k in range(i+1, n):
+                d = float(distance_fn(selected_jobs[i], selected_jobs[k]))
+                if d < 0.0: d = 0.0
+                if d > 1.0: d = 1.0
+                D[i][k] = d
+                D[k][i] = d
+
+        # helper: k-NN mean or soft-min for each row i (excluding self)
+        def local_div(i: int) -> float:
+            row = [D[i][j] for j in range(n) if j != i]
+            if not row:
+                return 0.0
+            row.sort()
+            if use_softmin:
+                # soft-min: sum_j w_j * d_j with w ∝ exp(-d_j/tau)
+                ws = [math.exp(-x / max(tau, 1e-6)) for x in row]
+                s = sum(ws)
+                return sum(w*x for w, x in zip(ws, row)) / s if s > 0 else row[0]
+            else:
+                kk = min(k_nn, len(row))
+                return sum(row[:kk]) / kk
+
+        # 2) Per-item soft/avg-kNN diversity
+        raw_local = [local_div(i) for i in range(n)]
+
+        # robust scaling via quantiles
+            
+        lo = self._quantile(raw_local, q_lo)
+        hi = self._quantile(raw_local, q_hi)
+        span = max(hi - lo, 1e-6)
+        local_scaled = [(x - lo) / span for x in raw_local]
+        local_scaled = [min(max(x, 0.0), 1.0) for x in local_scaled]
+
+        # 3) Leave-one-out on the same metric (avg kNN or soft-min)
+        if n == 2:
+            # symmetric case: both get the same diversity
+            loo_scaled = [D[0][1], D[0][1]]
+        else:
+            # baseline: mean of local diversities
+            base_mean = sum(local_scaled) / len(local_scaled)
+
+            loo_contrib = []
+            for i in range(n):
+                # recompute local diversities for u != i without using i
+                loc_wo_i = []
+                for u in range(n):
+                    if u == i:
+                        continue
+                    # neighbors of u excluding {u,i}
+                    neighbors = [D[u][v] for v in range(n) if v != u and v != i]
+                    if not neighbors:
+                        loc_wo_i.append(0.0)
+                        continue
+                    neighbors.sort()
+                    if use_softmin:
+                        ws = [math.exp(-x / max(tau, 1e-6)) for x in neighbors]
+                        s = sum(ws)
+                        v = sum(w*x for w, x in zip(ws, neighbors)) / s if s > 0 else neighbors[0]
+                    else:
+                        kk = min(k_nn, len(neighbors))
+                        v = sum(neighbors[:kk]) / kk
+                    loc_wo_i.append(v)
+
+                # robust-scale the temporary set like above
+                lo2 = self._quantile(loc_wo_i, q_lo); hi2 = self._quantile(loc_wo_i, q_hi)
+                span2 = max(hi2 - lo2, 1e-6)
+                loc_wo_i_scaled = [(x - lo2) / span2 for x in loc_wo_i]
+                loc_wo_i_scaled = [min(max(x, 0.0), 1.0) for x in loc_wo_i]
+
+                mean_wo_i = sum(loc_wo_i_scaled) / len(loc_wo_i_scaled) if loc_wo_i_scaled else 0.0
+                drop = max(base_mean - mean_wo_i, 0.0)  # non-negative contribution
+                loo_contrib.append(drop)
+
+            # robust scale contributions
+            lo_c = self._quantile(loo_contrib, q_lo); hi_c = self._quantile(loo_contrib, q_hi)
+            span_c = max(hi_c - lo_c, 1e-6)
+            loo_scaled = [(x - lo_c) / span_c for x in loo_contrib]
+            loo_scaled = [min(max(x, 0.0), 1.0) for x in loo_scaled]
+
+        # 4) Combine signals + label smoothing
+        final_div = [min(max(0.5*a + 0.5*b, label_eps), 1.0 - label_eps) for a, b in zip(local_scaled, loo_scaled)]
+
+        # write back
+        for j, d in zip(selected_jobs, final_div):
+            j.diversity_score = d
+            q = float(getattr(j, "quality", 0.0) or 0.0)
+            j.selection_score = alpha * q + (1.0 - alpha) * d
+
+        return selected_jobs
+
+
     def dedupe_and_compress(
         self,
         jobs: List[Job],
         ratio: Optional[float] = None,
         *,
+        greedy_diversity: bool = False,
         seen_filter=None,
     ) -> List[Job]:
         """
@@ -284,6 +428,8 @@ class JobCurator:
             if not getattr(job, "exact_hash", None):
                 job.exact_hash = build_exact_hash(job)
             job.signature = composite_signature(job)
+
+        self.jobs = jobs
 
         # -------- exact dedup --------
         seen_exact: Dict[object, Job] = {}
@@ -356,8 +502,6 @@ class JobCurator:
                 by_key[key] = j
         pool_jobs = list(by_key.values())
         
-        # pool_jobs.sort(key=lambda j: j.quality, reverse=True) alternative to the above withtout quality check
-
         if not pool_jobs:
             return []
 
@@ -372,28 +516,43 @@ class JobCurator:
             return selected_jobs
 
         # -------- diversity-aware greedy selection --------
-        pool_jobs.sort(key=lambda j: j.quality, reverse=True)
-        selected_jobs: List[Job] = [pool_jobs.pop(0)]  # seed with best quality (pool is already sorted desc)
         alpha = min(max(self.alpha, 0.0), 1.0) # clamp alpha to [0,1] to avoid surprises
+        pool_jobs.sort(key=lambda j: j.quality, reverse=True)
+        seed_job = pool_jobs.pop(0) # best quality job as seed and remove from pool
+        seed_job.diversity_score = 1.0  # better in the case of robust scaling than 0.5
+        seed_job.selection_score = alpha * seed_job.quality + (1.0 - alpha) * seed_job.diversity_score
+
+        selected_jobs: List[Job] = [seed_job]  # seed selected_jobs with best quality and remove it from pool_jobs (already sorted desc)
 
         while len(selected_jobs) < K and pool_jobs:
-            # compute min Hamming distance to any selected_jobs
+            # compute min diversity distance to any selected_jobs
             dmins = []
             for j in pool_jobs:
                 dmin = min(self._diversity_distance(j, s) for s in selected_jobs)
                 dmins.append((j, dmin))
 
-            # normalize diversity
+            # dmins is a list of (job, dmin) you already computed
             dvals = [d for _, d in dmins]
-            dmin_val, dmax_val = min(dvals), max(dvals)
-            span = max(dmax_val - dmin_val, 1) # avoid div by zero and magic 1.0
 
-            best_j = None
+            # robust scaling via quantiles
+
+            q_lo, q_hi = 0.10, 0.90
+            lo = self._quantile(dvals, q_lo)
+            hi = self._quantile(dvals, q_hi)
+            span = max(hi - lo, 1e-6)  # no magic 1, just tiny epsilon
+
+            # optional label smoothing to avoid exact 0/1
+            eps = 0.02
+
+            best_j_ = None
             best_score = -1.0
             for j, d in dmins:
-                j.diversity_score = (d - dmin_val) / span  # optional: store diversity score
-                j.selection_score = alpha * j.quality + (1.0 - alpha) * j.diversity_score
-                if  j.selection_score > best_score:
+                z = (d - lo) / span            # robust-scaled
+                z = 0.0 if z < 0.0 else (1.0 if z > 1.0 else z)
+                z = eps + (1.0 - 2.0*eps) * z  # smooth to (eps, 1-eps)
+                j.diversity_score = z
+                j.selection_score = alpha * j.quality + (1.0 - alpha) * z
+                if j.selection_score > best_score:
                     best_score = j.selection_score
                     best_j = j
                 
@@ -406,14 +565,19 @@ class JobCurator:
             pool_jobs.sort(key=lambda j: j.quality, reverse=True)
             selected_jobs.extend(pool_jobs[: (K - len(selected_jobs))])
 
+        # final recompute diversity properly on the FINAL selected set
+        if greedy_diversity:
+           self.recompute_diversity_scores(selected_jobs, alpha=self.alpha, distance_fn=self._diversity_distance)
+
         # -------- update seen_filter with kept items --------
         if seen_filter is not None:
             for j in selected_jobs:
                 self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
 
-        return sorted(selected_jobs, key=lambda j: j.selection_score, reverse=True)
+        self.selected_jobs = sorted(selected_jobs, key=lambda j: j.selection_score, reverse=True)
+        return self.selected_jobs
     
-
+    @staticmethod
     def compute_job_stats(jobs: List[Job]) -> dict:
         """
         Simple stats on length and quality using stdlib only.
@@ -437,3 +601,88 @@ class JobCurator:
             "quality_std": float(pstdev(qualities)) if len(qualities) > 1 else 0.0,
             "count": len(jobs),
         }
+    
+    def print_compression_summary(self, n_preview: int = 0, t_ms: float = 0.0) -> None:
+        total_jobs = len(getattr(self, "jobs", []) or [])
+        selected   = getattr(self, "selected_jobs", []) or []
+        kept = len(selected)
+        keep_ratio = (kept / total_jobs) if total_jobs else 0.0
+
+        line = f" 🔎 preview: {n_preview} | 🎯 ratio: {keep_ratio:.2f} | 🧠 backend: {self.backend} | ⏱️  time: {t_ms:.1f} ms "
+        print("┌" + "─"*(len(line) + 2) + "┐")
+        print("│" + line + "│")
+        print("└" + "─"*(len(line) + 2) + "┘")
+        print("")
+
+        total_stats = self.compute_job_stats(self.jobs)
+        comp_stats  = self.compute_job_stats(selected)
+
+        # --- Stdlib table ---
+        def fmt(st):
+            return [
+                f"{st['count']}",
+                f"{st['length_mean']:.2f}",
+                f"{st['length_std']:.2f}",
+                f"{st['quality_mean']:.3f}",
+                f"{st['quality_std']:.3f}",
+            ]
+
+        print(f"Total jobs: {total_jobs} | Selected: {kept} ({keep_ratio:.1%} kept)")
+        headers = ["Dataset", "Count", "Len μ", "Len σ", "Qual μ", "Qual σ"]
+        rows = [
+            ["All jobs", *fmt(total_stats)],
+            ["Selected", *fmt(comp_stats)],
+        ]
+
+        col_widths = [max(len(str(x)) for x in col) for col in zip(headers, *rows)]
+        def line(fill="-"):
+            return "+" + "+".join(fill * (w + 2) for w in col_widths) + "+"
+
+        def fmt_row(vals):
+            return "| " + " | ".join(str(v).rjust(w) for v, w in zip(vals, col_widths)) + " |"
+
+        print(line("-"))
+        print(fmt_row(headers))
+        print(line("="))
+        for r in rows:
+            print(fmt_row(r))
+        print(line("-"))
+
+    @staticmethod
+    def print_jobs_summary(jobs, num_selected_to_show=10, label="jobs set"):
+        n_show = max(0, min(num_selected_to_show, len(jobs)))
+        rows = []
+        for j in jobs[:n_show]:
+            city = getattr(getattr(j, "location", None), "city", None) or "Unknown"
+            h_str = (j.canonical_hash(4) if hasattr(j, "canonical_hash") else None) or "NA"
+            q = getattr(j, "quality", None)
+            d = getattr(j, "diversity_score", None)
+            s = getattr(j, "selection_score", None)
+            q_str = f"{q:.3f}" if isinstance(q, (int, float)) else "NA"
+            d_str = f"{d:.3f}" if isinstance(d, (int, float)) else "NA"
+            s_str = f"{s:.3f}" if isinstance(s, (int, float)) else "NA"
+            title = (getattr(j, "title", "") or "").strip()
+            rows.append([str(j.id), title, city, q_str, d_str, s_str, h_str])
+
+        # ASCII table
+        headers = ["ID", "Title", "City", "Quality", "Diversity", "Selection", "Hash"]
+        data = [headers] + rows
+        widths = [max(len(str(x)) for x in col) for col in zip(*data)]
+
+        def line(ch="-", cross="+"):
+            return cross + cross.join(ch * (w + 2) for w in widths) + cross
+
+        def fmt_row(vals):
+            return "| " + " | ".join(str(v).ljust(w) if i in (0,1,2,6)
+                                    else str(v).rjust(w)
+                                    for i,(v,w) in enumerate(zip(vals, widths))) + " |"
+
+        print(f"\n=== Top {n_show} jobs from {label} ===")
+        print(line("-"))
+        print(fmt_row(headers))
+        print(line("="))
+        for r in rows:
+            print(fmt_row(r))
+        print(line("-"))
+
+

@@ -111,7 +111,7 @@ def faiss_hash_clusters(
     for idx, job in enumerate(jobs):
         X[idx] = build_faiss_vector(job, dim_sig=dim_sig)
         job.faiss_dim_sig = dim_sig
-        job.faiss_hashvector = X[idx].toarray().ravel().astype(np.float32).tolist()
+        job.faiss_hashvector = X[idx].ravel().astype(np.float32).tolist()
 
     index = faiss.IndexFlatL2(full_dim)
     index.add(X)
