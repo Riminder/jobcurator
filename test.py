@@ -346,7 +346,7 @@ def main():
     print(f"\n=== Top {num_selected_to_show} jobs from compressed set ===")
     for j in compressed[:num_selected_to_show]:
         city = getattr(getattr(j, "location", None), "city", None) or "Unknown"
-        h_str = j.printable_hash(16) or "NA"
+        h_str = j.canonical_hash(16) or "NA"
         q = getattr(j, "quality", None)
         d = getattr(j, "diversity_score", None)
         s = getattr(j, "selection_score", None)

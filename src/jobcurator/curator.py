@@ -341,12 +341,13 @@ class JobCurator:
             C.sort(key=lambda j: j.quality, reverse=True)
 
         # -------- candidate pool (cap per cluster) --------
-        pool: List[Job] = []
+        pool_jobs: List[Job] = []
         for C in clusters:
             if C:
-                pool.extend(C[: self.max_per_cluster_in_pool])
+                pool_jobs.extend(C[: self.max_per_cluster_in_pool])
 
         # dedupe by canonical_id in pool
+        '''
         by_key = {}
         for j in pool:
             key = j.canonical_id
@@ -355,6 +356,8 @@ class JobCurator:
                             (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val):
                 by_key[key] = j
         pool_jobs = list(by_key.values())
+        '''
+        pool_jobs.sort(key=lambda j: j.quality, reverse=True)
 
         if not pool_jobs:
             return []
@@ -378,13 +381,14 @@ class JobCurator:
             # compute min Hamming distance to any selected_jobs
             dmins = []
             for j_ in pool_jobs:
-                dmin = min(self._diversity_distance(j_.signature, s.signature) for s in selected_jobs)
+                dmin = min(self._diversity_distance(j_, s) for s in selected_jobs)
+                print(f"Job {j_.id} min diversity distance to selected: {dmin:.4f}")
                 dmins.append((j_, dmin))
 
             # normalize diversity
             dvals = [d for _, d in dmins]
             dmin_val, dmax_val = min(dvals), max(dvals)
-            span = max(dmax_val - dmin_val, 1e-9) # avoid div by zero and magic 1.0
+            span = max(dmax_val - dmin_val, 1) # avoid div by zero and magic 1.0
 
             best_j_ = None
             best_score = -1.0

@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
 import math
-from .hash_utils import flatten_category_tokens
-
 
 @dataclass
 class Category:
@@ -66,12 +64,12 @@ class Job:
     categories:
       Dict[dimension_name, List[Category]]
     """
-    id: str
-    reference: str
+    id:  str
     title: str
     text: str
     categories: Dict[str, List[Category]]
-    location: Location3DField
+    reference:  Optional[str] = None
+    location: Optional[Location3DField] = None
     salary: Optional[SalaryField] = None
     company: Optional[str] = None
     contract_type: Optional[str] = None
@@ -114,50 +112,6 @@ class Job:
         if getattr(self, "id", None):
             return str(self.id)
         return str(id(self))
-    
-    @property
-    def numerical_vector(self) -> List[float]:
-        """
-        Numeric feature vector for ML-based filters / stats:
-
-        - length_tokens
-        - completion_score_val
-        - quality
-        - avg salary
-        - 3D location (x,y,z)
-        - category richness (count of flattened tokens)
-        """
-        if self.location is not None:
-            self.location.compute_xyz()
-            x = self.location.x
-            y = self.location.y
-            z = self.location.z
-        else:
-            x = y = z = 0.0
-
-        sal = 0.0
-        if self.salary is not None:
-            vals = []
-            if self.salary.min_value is not None:
-                vals.append(self.salary.min_value)
-            if self.salary.max_value is not None:
-                vals.append(self.salary.max_value)
-            if vals:
-                sal = sum(vals) / len(vals)
-
-        cat_tokens = flatten_category_tokens(self)
-        cat_count = float(len(cat_tokens))
-
-        return [
-            float(self.length_tokens),
-            float(self.completion_score_val),
-            float(self.quality),
-            float(sal),
-            float(x),
-            float(y),
-            float(z),
-            cat_count,
-        ]
     
     def canonical_hash(self, maxlen: int = 16) -> Optional[str]:
         """
