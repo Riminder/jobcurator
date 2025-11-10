@@ -450,7 +450,7 @@ JobCurator(
     alpha: float = 0.6,              # quality vs diversity weight
     max_per_cluster_in_pool: int = 3,
     d_sim_threshold: int = 20,       # SimHash Hamming threshold for clustering
-    max_cluster_distance_km: float = 150.0,  # max distance between cities in same cluster
+    max_cluster_distance_km: float = 50.0,  # max distance between cities in same cluster
 )
 ```
 
@@ -606,7 +606,7 @@ Available backends:
 
 ### 7. **Global compression with diversity**
 
-   - Merge all per-cluster candidates into a global pool and deduplicate by `id`.
+   - Merge all per-cluster candidates into a global pool and deduplicate by `cannonical_id` based the job `id`, `reference`, `company` .
    - Sort the pool by `quality` (descending).
    - Greedy selection:
 
@@ -614,12 +614,16 @@ Available backends:
      2. Repeatedly pick the job `j` in the pool that maximizes:
 
         ```text
-        diversified_score(j) =
+        selection_score(j) =
             alpha * quality(j)
-          + (1 - alpha) * normalized_min_hamming_distance_to_selected(j)
+          + (1 - alpha) * normalized_diversity_distance(j)
         ```
+        where `normalized_diversity_distance(j)` depends on the backend:
 
-        where the distance is computed on the full 128-bit `signature`.
+        - `default_hash`   → ***normalized Hamming distance*** on 64-bit composite signature
+        - `minhash_hash`   → ***1 - Jaccard estimate*** from MinHash signatures
+        - `sklearn_hash`   → ***cosine distance*** on HashingVectorizer vector
+        - `faiss_hash`     → ***L2 distance*** on FAISS composite vector
 
    - Stop when you’ve selected:
 

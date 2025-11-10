@@ -158,7 +158,7 @@ class JobCurator:
 
     # 🌍 Global parameters (all backends)
     ratio: float = 1.0
-    alpha: float = 0.2
+    alpha: float = 0.6
     max_per_cluster_in_pool: int = 3
     backend: Literal["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"] = "default_hash"
     use_outlier_filter: bool = False
@@ -288,7 +288,7 @@ class JobCurator:
         # -------- exact dedup --------
         seen_exact: Dict[object, Job] = {}
         for j in jobs:
-            h = job.exact_hash 
+            h = j.exact_hash 
 
             prev_j = seen_exact.get(h)
             # skip duplicate exact hashes, keep the first / highest quality (we sort clusters later)
@@ -297,7 +297,6 @@ class JobCurator:
                 seen_exact[h] = j
 
         unique_jobs: List[Job] = list(seen_exact.values())
-
         if not unique_jobs:
             return []
 
@@ -347,17 +346,17 @@ class JobCurator:
                 pool_jobs.extend(C[: self.max_per_cluster_in_pool])
 
         # dedupe by canonical_id in pool
-        '''
+        
         by_key = {}
-        for j in pool:
+        for j in pool_jobs:
             key = j.canonical_id
             prev_j = by_key.get(key)
             if prev_j is None or (j.quality, j.length_tokens, j.completion_score_val) > \
                             (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val):
                 by_key[key] = j
         pool_jobs = list(by_key.values())
-        '''
-        pool_jobs.sort(key=lambda j: j.quality, reverse=True)
+        
+        # pool_jobs.sort(key=lambda j: j.quality, reverse=True) alternative to the above withtout quality check
 
         if not pool_jobs:
             return []
@@ -380,29 +379,28 @@ class JobCurator:
         while len(selected_jobs) < K and pool_jobs:
             # compute min Hamming distance to any selected_jobs
             dmins = []
-            for j_ in pool_jobs:
-                dmin = min(self._diversity_distance(j_, s) for s in selected_jobs)
-                print(f"Job {j_.id} min diversity distance to selected: {dmin:.4f}")
-                dmins.append((j_, dmin))
+            for j in pool_jobs:
+                dmin = min(self._diversity_distance(j, s) for s in selected_jobs)
+                dmins.append((j, dmin))
 
             # normalize diversity
             dvals = [d for _, d in dmins]
             dmin_val, dmax_val = min(dvals), max(dvals)
             span = max(dmax_val - dmin_val, 1) # avoid div by zero and magic 1.0
 
-            best_j_ = None
+            best_j = None
             best_score = -1.0
-            for j_, d in dmins:
-                j_.diversity_score = (d - dmin_val) / span  # optional: store diversity score
-                j_.selection_score = alpha * j_.quality + (1.0 - alpha) * j_.diversity_score
-                if  j_.selection_score > best_score:
-                    best_score = j_.selection_score
-                    best_j_ = j_
+            for j, d in dmins:
+                j.diversity_score = (d - dmin_val) / span  # optional: store diversity score
+                j.selection_score = alpha * j.quality + (1.0 - alpha) * j.diversity_score
+                if  j.selection_score > best_score:
+                    best_score = j.selection_score
+                    best_j = j
                 
-            # safety: best_j_ should exist since pool not empty
-            selected_jobs.append(best_j_)
-            pool_jobs.remove(best_j_)
-
+            # safety: best_j should exist since pool not empty
+            selected_jobs.append(best_j)
+            pool_jobs.remove(best_j)
+        
         # top-up if needed
         if len(selected_jobs) < K and pool_jobs:
             pool_jobs.sort(key=lambda j: j.quality, reverse=True)
@@ -413,7 +411,7 @@ class JobCurator:
             for j in selected_jobs:
                 self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
 
-        return selected_jobs
+        return sorted(selected_jobs, key=lambda j: j.selection_score, reverse=True)
     
 
     def compute_job_stats(jobs: List[Job]) -> dict:
