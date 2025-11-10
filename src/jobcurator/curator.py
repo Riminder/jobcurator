@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Literal
 import math
+from statistics import mean, pstdev
 
 from .models import Job
 from .hash_utils import (
@@ -15,15 +16,24 @@ from .hash_utils import (
     composite_signature,
     hamming_distance,
     build_clusters_with_lsh,
+    hamming_normalized_distance,
 )
 
-from .minhash_backends import minhash_hash_clusters
+from .minhash_backends import (
+    minhash_hash_clusters, 
+    minhash_jaccard_distance
+)
+
 from .sklearn_backends import (
     sklearn_hash_clusters,
     filter_outliers,
+    sklearn_cosine_distance,
 )
-from .faiss_backends import faiss_hash_clusters
 
+from .faiss_backends import (
+    faiss_cosine_distance, 
+    faiss_hash_clusters
+)
 
 @dataclass
 class JobCurator:
@@ -148,7 +158,7 @@ class JobCurator:
 
     # 🌍 Global parameters (all backends)
     ratio: float = 1.0
-    alpha: float = 0.6
+    alpha: float = 0.2
     max_per_cluster_in_pool: int = 3
     backend: Literal["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"] = "default_hash"
     use_outlier_filter: bool = False
@@ -190,6 +200,29 @@ class JobCurator:
                 pass
         # best-effort no-op otherwise
         return
+
+    def _diversity_distance(self, a: Job, b: Job) -> float:
+        """
+        Return a distance in [0,1] depending on backend:
+        - default_hash: Hamming on 64-bit simhash/composite signature (int)
+        - minhash_hash: 1 - Jaccard_estimate from MinHash signatures (tuple[int])
+        - sklearn_hash: cosine distance on unit-normalized vectors (if available)
+        - faiss_hash:   L2 distance on vectors, normalized to [0,1] by a cap
+        """
+        if self.backend == "default_hash":
+            return hamming_normalized_distance(a, b)
+
+        if self.backend == "minhash_hash":
+            return minhash_jaccard_distance(a, b)
+        
+        elif self.backend == "sklearn_hash":
+            return sklearn_cosine_distance(a, b)
+
+        elif self.backend == "faiss_hash":
+           return faiss_cosine_distance(a, b)
+
+        # fallback: treat as identical
+        return 0.0
 
 
     def dedupe_and_compress(
@@ -253,14 +286,17 @@ class JobCurator:
             job.signature = composite_signature(job)
 
         # -------- exact dedup --------
-        seen_exact: Dict[str, str] = {}
-        unique_jobs: List[Job] = []
-        for job in jobs:
+        seen_exact: Dict[object, Job] = {}
+        for j in jobs:
+            h = job.exact_hash 
+
+            prev_j = seen_exact.get(h)
             # skip duplicate exact hashes, keep the first / highest quality (we sort clusters later)
-            if job.exact_hash in seen_exact:
-                continue
-            seen_exact[job.exact_hash] = job.id
-            unique_jobs.append(job)
+            if prev_j is None or (j.quality, j.length_tokens, j.completion_score_val, str(j.id)) > \
+                            (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val, str(prev_j.id)):
+                seen_exact[h] = j
+
+        unique_jobs: List[Job] = list(seen_exact.values())
 
         if not unique_jobs:
             return []
@@ -310,60 +346,92 @@ class JobCurator:
             if C:
                 pool.extend(C[: self.max_per_cluster_in_pool])
 
-        # dedupe by id in pool
-        if not pool:
-            return []
-        # dedupe by id in pool
-        pool = list({j.id: j for j in pool}.values())
+        # dedupe by canonical_id in pool
+        by_key = {}
+        for j in pool:
+            key = j.canonical_id
+            prev_j = by_key.get(key)
+            if prev_j is None or (j.quality, j.length_tokens, j.completion_score_val) > \
+                            (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val):
+                by_key[key] = j
+        pool_jobs = list(by_key.values())
 
-        # -------- determine K on the actual pool --------
-        K = max(1, math.ceil(len(pool) * r))
-        if K >= len(pool):
-            selected = sorted(pool, key=lambda j: j.quality, reverse=True)
+        if not pool_jobs:
+            return []
+
+        # -------- determine K on the actual pool_jobs --------
+        K = max(1, math.ceil(len(pool_jobs) * r)) # number of items to select
+        if K >= len(pool_jobs):
+            selected_jobs = sorted(pool_jobs, key=lambda j: j.quality, reverse=True)
             # update seen_filter before returning
             if seen_filter is not None:
-                for j in selected:
+                for j in selected_jobs:
                     self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
-            return selected
+            return selected_jobs
 
         # -------- diversity-aware greedy selection --------
-        pool.sort(key=lambda j: j.quality, reverse=True)
-        selected: List[Job] = [pool.pop(0)]  # seed with best quality (pool is already sorted desc)
+        pool_jobs.sort(key=lambda j: j.quality, reverse=True)
+        selected_jobs: List[Job] = [pool_jobs.pop(0)]  # seed with best quality (pool is already sorted desc)
         alpha = min(max(self.alpha, 0.0), 1.0) # clamp alpha to [0,1] to avoid surprises
 
-        while len(selected) < K and pool:
-            # compute min Hamming distance to any selected
+        while len(selected_jobs) < K and pool_jobs:
+            # compute min Hamming distance to any selected_jobs
             dmins = []
-            for x in pool:
-                dmin = min(hamming_distance(x.signature, s.signature) for s in selected)
-                dmins.append((x, dmin))
+            for j_ in pool_jobs:
+                dmin = min(self._diversity_distance(j_.signature, s.signature) for s in selected_jobs)
+                dmins.append((j_, dmin))
 
             # normalize diversity
             dvals = [d for _, d in dmins]
             dmin_val, dmax_val = min(dvals), max(dvals)
-            span = max(dmax_val - dmin_val, 1)
+            span = max(dmax_val - dmin_val, 1e-9) # avoid div by zero and magic 1.0
 
-            best_x = None
+            best_j_ = None
             best_score = -1.0
-            for x, d in dmins:
-                diversity = (d - dmin_val) / span
-                score = alpha * x.quality + (1.0 - alpha) * diversity
-                if score > best_score:
-                    best_score = score
-                    best_x = x
+            for j_, d in dmins:
+                j_.diversity_score = (d - dmin_val) / span  # optional: store diversity score
+                j_.selection_score = alpha * j_.quality + (1.0 - alpha) * j_.diversity_score
+                if  j_.selection_score > best_score:
+                    best_score = j_.selection_score
+                    best_j_ = j_
                 
-            # safety: best_x should exist since pool not empty
-            selected.append(best_x)
-            pool.remove(best_x)
+            # safety: best_j_ should exist since pool not empty
+            selected_jobs.append(best_j_)
+            pool_jobs.remove(best_j_)
 
         # top-up if needed
-        if len(selected) < K and pool:
-            pool.sort(key=lambda j: j.quality, reverse=True)
-            selected.extend(pool[: (K - len(selected))])
+        if len(selected_jobs) < K and pool_jobs:
+            pool_jobs.sort(key=lambda j: j.quality, reverse=True)
+            selected_jobs.extend(pool_jobs[: (K - len(selected_jobs))])
 
         # -------- update seen_filter with kept items --------
         if seen_filter is not None:
-            for j in selected:
+            for j in selected_jobs:
                 self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
 
-        return selected
+        return selected_jobs
+    
+
+    def compute_job_stats(jobs: List[Job]) -> dict:
+        """
+        Simple stats on length and quality using stdlib only.
+        """
+        if not jobs:
+            return {
+                "length_mean": 0.0,
+                "length_std": 0.0,
+                "quality_mean": 0.0,
+                "quality_std": 0.0,
+                "count": 0,
+            }
+
+        lengths = [j.length_tokens for j in jobs]
+        qualities = [j.quality for j in jobs]
+
+        return {
+            "length_mean": float(mean(lengths)),
+            "length_std": float(pstdev(lengths)) if len(lengths) > 1 else 0.0,
+            "quality_mean": float(mean(qualities)),
+            "quality_std": float(pstdev(qualities)) if len(qualities) > 1 else 0.0,
+            "count": len(jobs),
+        }

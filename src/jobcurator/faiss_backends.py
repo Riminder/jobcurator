@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
 def _ensure_faiss():
     if not _HAS_FAISS:
         raise RuntimeError(
-            "numpy is required for hashing. Install with: pip install numpy. "
+            "numpy is required for this backend. Install with: pip install numpy. "
             "faiss is required for this backend. Install it with 'pip install faiss-cpu' "
             "or the appropriate FAISS package for your platform."
         )
@@ -66,6 +66,23 @@ def build_faiss_vector(job: Job, dim_sig: int = 128) -> np.ndarray:
 
     return np.concatenate([sig_vec, loc_vec, cat_vec], axis=0)
 
+def _vec(job) -> np.ndarray:
+    """float32, contiguous 1D array from stored list."""
+    v = np.asarray(job.faiss_hashvector, dtype=np.float32)
+    return np.ascontiguousarray(v)
+
+# Distances
+def l2sq(a, b) -> float:           # squared L2 (same metric FAISS IndexFlatL2 uses)
+    va, vb = _vec(a), _vec(b)
+    d = va - vb
+    return float(np.dot(d, d))
+
+def faiss_cosine_distance(a, b) -> float:    # cosine distance in [0, 2] (≈[0,1] if nonnegative)
+    va, vb = _vec(a), _vec(b)
+    na = np.linalg.norm(va); nb = np.linalg.norm(vb)
+    if na == 0.0 or nb == 0.0: return 1.0
+    sim = float(np.dot(va, vb) / (na * nb))
+    return 1.0 - max(min(sim, 1.0), -1.0)
 
 def faiss_hash_clusters(
     jobs: List[Job],
@@ -93,6 +110,8 @@ def faiss_hash_clusters(
     X = np.zeros((n, full_dim), dtype="float32")
     for idx, job in enumerate(jobs):
         X[idx] = build_faiss_vector(job, dim_sig=dim_sig)
+        job.faiss_dim_sig = dim_sig
+        job.faiss_hashvector = X[idx].toarray().ravel().astype(np.float32).tolist()
 
     index = faiss.IndexFlatL2(full_dim)
     index.add(X)

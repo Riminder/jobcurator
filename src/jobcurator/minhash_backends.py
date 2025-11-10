@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional
 from collections import defaultdict
 
 from .models import Job
@@ -92,6 +92,22 @@ def jaccard_similarity(a: Set[str], b: Set[str]) -> float:
     uni = len(a | b)
     return inter / uni
 
+def minhash_jaccard_distance(a: Job, b: Job) -> float:
+    sig_a = getattr(a, "minhash_sig", None)
+    sig_b = getattr(b, "minhash_sig", None)
+
+    # If either is missing, fall back (choose policy: return 1.0 = maximally different)
+    if not isinstance(sig_a, list) or not isinstance(sig_b, list):
+        return 1.0
+
+    # Require same length
+    if len(sig_a) != len(sig_b) or len(sig_a) == 0:
+        return 1.0
+
+    eq = sum(1 for x, y in zip(sig_a, sig_b) if x == y)
+    jaccard_hat = eq / float(len(sig_a))
+    return 1.0 - jaccard_hat
+
 
 def minhash_hash_clusters(
     jobs: List[Job],
@@ -123,7 +139,8 @@ def minhash_hash_clusters(
     for j in jobs:
         toks = job_to_shingles(j)
         tokens_map[j.id] = set(toks)
-        sig_map[j.id] = minhash_signature(toks, num_perm=num_perm)
+        sig_map[j.id] = ensure_minhash(j, num_perm=num_perm)
+
 
     # 2) LSH buckets (banding + optional multi-probe)
     buckets: Dict[int, List[Job]] = defaultdict(list)
@@ -188,3 +205,16 @@ def minhash_hash_clusters(
         clusters_dict[root].append(j)
 
     return list(clusters_dict.values())
+
+def ensure_minhash(job: Job, num_perm: int = 64) -> List[int]:
+    """
+    Return a MinHash signature for this job, computing and storing it on first use.
+    Recomputes only if the stored signature length doesn't match num_perm.
+    """
+    if job.minhash_sig and job.minhash_len == num_perm:
+        return job.minhash_sig
+
+    toks = job_to_shingles(job)
+    sig = minhash_signature(toks, num_perm=num_perm)
+    job.minhash_sig = sig
+    return sig

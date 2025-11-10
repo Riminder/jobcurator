@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import List, Dict
 from collections import defaultdict
-from statistics import mean, pstdev
 
 from .models import Job
 from .hash_utils import flatten_category_tokens
 
 _HAS_SKLEARN = True
 try:
+    import numpy as np  # type: ignore
     from sklearn.feature_extraction.text import HashingVectorizer # type: ignore
     from sklearn.neighbors import NearestNeighbors # type: ignore
     from sklearn.ensemble import IsolationForest # type: ignore
@@ -19,52 +19,19 @@ except ImportError:  # pragma: no cover
 def _ensure_sklearn():
     if not _HAS_SKLEARN:
         raise RuntimeError(
-            "scikit-learn is required for this feature. Install it with 'pip install scikit-learn'."
+            "numpy is required for this backend. Install it with 'pip install numpy'. "
+            "scikit-learn is required for this backend. Install it with 'pip install scikit-learn'."
         )
 
 
-def job_to_vector(job: Job):
-    """
-    Numeric feature vector for ML-based filters / stats:
-
-    - length_tokens
-    - completion_score_val
-    - quality
-    - avg salary
-    - 3D location (x,y,z)
-    - category richness (count of flattened tokens)
-    """
-    if job.location is not None:
-        job.location.compute_xyz()
-        x = job.location.x
-        y = job.location.y
-        z = job.location.z
-    else:
-        x = y = z = 0.0
-
-    sal = 0.0
-    if job.salary is not None:
-        vals = []
-        if job.salary.min_value is not None:
-            vals.append(job.salary.min_value)
-        if job.salary.max_value is not None:
-            vals.append(job.salary.max_value)
-        if vals:
-            sal = sum(vals) / len(vals)
-
-    cat_tokens = flatten_category_tokens(job)
-    cat_count = float(len(cat_tokens))
-
-    return [
-        float(job.length_tokens),
-        float(job.completion_score_val),
-        float(job.quality),
-        float(sal),
-        float(x),
-        float(y),
-        float(z),
-        cat_count,
-    ]
+def sklearn_cosine_distance(a: Job, b: Job) -> float:
+    # NumPy (assumes vectors are L2-normalized from HashingVectorizer)
+    va = np.asarray(a.sklearn_hashvector, dtype=np.float32)
+    vb = np.asarray(b.sklearn_hashvector, dtype=np.float32)
+    if va.size == 0 or vb.size == 0 or va.shape != vb.shape: return 1.0
+    dot = float(np.dot(va, vb))           # cosine similarity
+    dot = min(max(dot, 0.0), 1.0)         # numerical clamp
+    return 1.0 - dot                      # cosine distance in [0,1]
 
 
 def sklearn_hash_clusters(
@@ -102,6 +69,10 @@ def sklearn_hash_clusters(
         alternate_sign=False,
     )
     X = hv.transform(texts)
+
+    # persist each job's vector row for reuse later
+    for j, row_idx in zip(jobs, range(X.shape[0])):
+        j.sklearn_hashvector =  X[row_idx].toarray().ravel().astype("float32").tolist()
 
     nn = NearestNeighbors(metric="cosine")
     nn.fit(X)
@@ -149,7 +120,7 @@ def filter_outliers(
     if not jobs:
         return jobs
 
-    X = [job_to_vector(j) for j in jobs]
+    X = [j.numerical_vector(j) for j in jobs]
     iso = IsolationForest(
         contamination=contamination,
         random_state=0,
@@ -161,29 +132,4 @@ def filter_outliers(
         if lbl == 1:
             filtered.append(j)
     return filtered
-
-
-def compute_job_stats(jobs: List[Job]) -> dict:
-    """
-    Simple stats on length and quality using stdlib only.
-    """
-    if not jobs:
-        return {
-            "length_mean": 0.0,
-            "length_std": 0.0,
-            "quality_mean": 0.0,
-            "quality_std": 0.0,
-            "count": 0,
-        }
-
-    lengths = [j.length_tokens for j in jobs]
-    qualities = [j.quality for j in jobs]
-
-    return {
-        "length_mean": float(mean(lengths)),
-        "length_std": float(pstdev(lengths)) if len(lengths) > 1 else 0.0,
-        "quality_mean": float(mean(qualities)),
-        "quality_std": float(pstdev(qualities)) if len(qualities) > 1 else 0.0,
-        "count": len(jobs),
-    }
 

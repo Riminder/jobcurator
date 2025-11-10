@@ -300,7 +300,7 @@ def parse_args():
         "--backend",
         type=str,
         default="default_hash",
-        choices=["default_hash", "sklearn_hash", "faiss_hash"],
+        choices=["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"],
         help="Backend to use for clustering/dedupe.",
     )
     return parser.parse_args()
@@ -345,8 +345,17 @@ def main():
 
     print(f"\n=== Top {num_selected_to_show} jobs from compressed set ===")
     for j in compressed[:num_selected_to_show]:
-        city = j.location.city or "Unknown"
-        print(f"- {j.id}: {j.title} @ {city} (quality={j.quality:.3f})")
+        city = getattr(getattr(j, "location", None), "city", None) or "Unknown"
+        h_str = j.printable_hash(16) or "NA"
+        q = getattr(j, "quality", None)
+        d = getattr(j, "diversity_score", None)
+        s = getattr(j, "selection_score", None)
+        q_str = f"{q:.3f}" if isinstance(q, (int, float)) else "NA"
+        d_str = f"{d:.3f}" if isinstance(d, (int, float)) else "NA"
+        s_str = f"{s:.3f}" if isinstance(s, (int, float)) else "NA"
+        print(f"- {j.id} | {j.title} @ {city} | quality={q_str} | diversity={d_str} | selection_score={s_str} | hash={h_str}")
+
+    #todo add diversity score and selection score
 
 
 if __name__ == "__main__":

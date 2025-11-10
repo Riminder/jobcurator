@@ -312,6 +312,17 @@ def composite_signature(job: Job) -> int:
     meta = build_meta_signature(job, bits=64)
     return (sim << 64) | meta
 
+def hamming_normalized_distance(a: Job, b: Job) -> float:
+    """
+    Hamming distance between two Job signatures, normalized to [0,1].
+    """
+    # assume composite_signature returns a 64-bit int
+    sa = getattr(a, "signature", None)
+    sb = getattr(b, "signature", None)
+    if sa is None or sb is None:
+        return 0.0
+    bits = 64
+    return min(hamming_distance(sa, sb) / bits, 1.0)
 
 # -------------------------
 # Geo utilities
