@@ -4,6 +4,7 @@ import pickle
 from typing import List, Set
 
 from jobcurator import CuckooFilter, Job
+
 from .base import LightJob
 
 
@@ -81,7 +82,9 @@ class SqlStoreDB:
             for j in compressed_jobs:
                 sig_str = str(j.signature)  # 128-bit int → string
                 city = getattr(j.location, "city", None) if j.location else None
-                country = getattr(j.location, "country_code", None) if j.location else None
+                country = (
+                    getattr(j.location, "country_code", None) if j.location else None
+                )
 
                 cur.execute(
                     """

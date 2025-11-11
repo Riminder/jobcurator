@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import os
 import json
+import os
 import pickle
 from datetime import datetime
 from typing import List, Set
 
 from jobcurator import CuckooFilter, Job
+
 from .base import LightJob
 
 DATA_DIR = "data"
@@ -74,19 +75,18 @@ class LocalFileStoreDB:
         country = getattr(loc, "country_code", None) if loc else None
 
         return {
-            "id": j.id,                         # REQUIRED
-            "title": j.title,                   # OPTIONAL
-            "text": j.text,                     # OPTIONAL
-            "company": j.company,               # OPTIONAL
-            "location_city": city,              # OPTIONAL
-            "location_country": country,        # OPTIONAL
-
-            "quality": float(j.quality),        # REQUIRED
-            "signature": str(j.signature),      # REQUIRED
+            "id": j.id,  # REQUIRED
+            "title": j.title,  # OPTIONAL
+            "text": j.text,  # OPTIONAL
+            "company": j.company,  # OPTIONAL
+            "location_city": city,  # OPTIONAL
+            "location_country": country,  # OPTIONAL
+            "quality": float(j.quality),  # REQUIRED
+            "signature": str(j.signature),  # REQUIRED
             "created_at": (
                 (j.created_at or datetime.utcnow()).isoformat() + "Z"
-            ),                                  # RECOMMENDED
-            "backend": backend,                 # RECOMMENDED
+            ),  # RECOMMENDED
+            "backend": backend,  # RECOMMENDED
         }
 
     def insert_compressed_jobs(self, compressed_jobs: List[Job], backend: str) -> None:

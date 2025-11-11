@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from typing import List, Dict, Set, Optional
 from collections import defaultdict
+from typing import Dict, List, Set
 
-from .models import Job
 from .hash_utils import (
-    normalize_text,
     flatten_category_tokens,
-    location_bucket,
-    salary_bucket,
-    hash_int,
     geo_distance_km,
+    hash_int,
+    location_bucket,
     multiprobe_band_keys,
+    normalize_text,
+    salary_bucket,
 )
+from .models import Job
 
 
 def job_to_shingles(
@@ -92,6 +92,7 @@ def jaccard_similarity(a: Set[str], b: Set[str]) -> float:
     uni = len(a | b)
     return inter / uni
 
+
 def minhash_jaccard_distance(a: Job, b: Job) -> float:
     sig_a = getattr(a, "minhash_sig", None)
     sig_b = getattr(b, "minhash_sig", None)
@@ -141,7 +142,6 @@ def minhash_hash_clusters(
         tokens_map[j.id] = set(toks)
         sig_map[j.id] = ensure_minhash(j, num_perm=num_perm)
 
-
     # 2) LSH buckets (banding + optional multi-probe)
     buckets: Dict[int, List[Job]] = defaultdict(list)
 
@@ -166,7 +166,7 @@ def minhash_hash_clusters(
             else:
                 keys = [(b, band_hash_val)]
 
-            for (bi, val) in keys:
+            for bi, val in keys:
                 bucket_key = hash_int(f"{bi}:{val}", seed=777, bits=64)
                 buckets[bucket_key].append(j)
 
@@ -205,6 +205,7 @@ def minhash_hash_clusters(
         clusters_dict[root].append(j)
 
     return list(clusters_dict.values())
+
 
 def ensure_minhash(job: Job, num_perm: int = 64) -> List[int]:
     """

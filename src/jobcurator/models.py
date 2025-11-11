@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Literal
-import math
+from typing import Dict, List, Literal, Optional
+
 
 @dataclass
 class Category:
     """
     Hierarchical category node.
     """
+
     id: str
     label: str
     level: int
@@ -22,6 +24,7 @@ class SalaryField:
     """
     Structured salary information.
     """
+
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     currency: str = "EUR"
@@ -36,6 +39,7 @@ class Location3DField:
     - alt_m: altitude in meters
     - x, y, z: computed Earth-centered Cartesian coordinates (meters)
     """
+
     lat: float
     lon: float
     alt_m: float = 0.0
@@ -64,11 +68,12 @@ class Job:
     categories:
       Dict[dimension_name, List[Category]]
     """
-    id:  str
+
+    id: str
     title: str
     text: str
     categories: Dict[str, List[Category]]
-    reference:  Optional[str] = None
+    reference: Optional[str] = None
     location: Optional[Location3DField] = None
     salary: Optional[SalaryField] = None
     company: Optional[str] = None
@@ -89,10 +94,10 @@ class Job:
     minhash_sig: Optional[List[int]] = field(default=None, repr=False)
     minhash_len: Optional[int] = field(default=None, repr=False)
     # SKlearn fields
-    sklearn_hashvector : Optional[List[float]] = field(default=None, repr=False)
-    faiss_dim_sig: Optional[int] = field(default=None, repr=False)           # the dim_sig used
+    sklearn_hashvector: Optional[List[float]] = field(default=None, repr=False)
+    faiss_dim_sig: Optional[int] = field(default=None, repr=False)  # the dim_sig used
     # FAISS fields
-    faiss_hashvector : Optional[List[float]] = field(default=None, repr=False)
+    faiss_hashvector: Optional[List[float]] = field(default=None, repr=False)
     # optional fields for selection explanation / clustering
     simhash_bucket: int = field(default=0, init=False)
     lsh_bucket: int = field(default=0, init=False)
@@ -102,6 +107,7 @@ class Job:
     cluster_size: Optional[int] = field(default=None, init=False)
     cluster_distance: Optional[float] = field(default=None, init=False)
     vector: Optional[List[float]] = field(default=None, init=False)
+
     # ids
     @property
     def canonical_id(self) -> Optional[str]:
@@ -112,7 +118,7 @@ class Job:
         if getattr(self, "id", None):
             return str(self.id)
         return str(id(self))
-    
+
     def canonical_hash(self, maxlen: int = 16) -> Optional[str]:
         """
         Return a short printable string for this job's exact_hash if it's set.
@@ -132,4 +138,3 @@ class Job:
         if maxlen and maxlen > 0 and len(s) > maxlen:
             return s[:maxlen] + "…"
         return s
-

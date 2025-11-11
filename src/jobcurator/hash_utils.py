@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Dict, List
-from collections import defaultdict
-from datetime import datetime
 import hashlib
 import math
+from collections import defaultdict
+from datetime import datetime
+from typing import Dict, List
 
 from .models import Job, Location3DField
-
 
 # -------------------------
 # Basic helpers
@@ -188,8 +187,9 @@ def completion_score(job: Job) -> float:
     add_field(job.location is not None)
 
     if job.salary is not None:
-        salary_non_empty = (job.salary.min_value is not None or
-                            job.salary.max_value is not None)
+        salary_non_empty = (
+            job.salary.min_value is not None or job.salary.max_value is not None
+        )
         add_field(salary_non_empty)
 
     has_categories = any(cats for cats in (job.categories or {}).values())
@@ -221,16 +221,12 @@ def source_quality(job: Job) -> float:
     return 0.5
 
 
-def compute_quality(job: Job,
-                    w_len=0.3,
-                    w_comp=0.4,
-                    w_fresh=0.2,
-                    w_src=0.1) -> float:
+def compute_quality(job: Job, w_len=0.3, w_comp=0.4, w_fresh=0.2, w_src=0.1) -> float:
     return (
-        w_len   * job.length_score +
-        w_comp  * job.completion_score_val +
-        w_fresh * freshness_score(job) +
-        w_src   * source_quality(job)
+        w_len * job.length_score
+        + w_comp * job.completion_score_val
+        + w_fresh * freshness_score(job)
+        + w_src * source_quality(job)
     )
 
 
@@ -267,7 +263,7 @@ def simhash_from_tokens(tokens, bits: int = 64) -> int:
     fp = 0
     for i in range(bits):
         if v[i] > 0:
-            fp |= (1 << i)
+            fp |= 1 << i
     return fp
 
 
@@ -289,7 +285,9 @@ def build_meta_signature(job: Job, bits: int = 64) -> int:
 
     if job.location:
         loc_str = f"{job.location.city or ''}|{job.location.country_code or ''}"
-        coord_str = f"{job.location.lat:.6f},{job.location.lon:.6f},{job.location.alt_m:.2f}"
+        coord_str = (
+            f"{job.location.lat:.6f},{job.location.lon:.6f},{job.location.alt_m:.2f}"
+        )
         values.append("loc:" + normalize_text(loc_str))
         values.append("coord:" + coord_str)
 
@@ -303,7 +301,7 @@ def build_meta_signature(job: Job, bits: int = 64) -> int:
         for k in range(num_hashes):
             h = hash_int(v, seed=100 + k, bits=32)
             pos = h % bits
-            bitset |= (1 << pos)
+            bitset |= 1 << pos
     return bitset
 
 
@@ -311,6 +309,7 @@ def composite_signature(job: Job) -> int:
     sim = build_simhash(job, bits=64)
     meta = build_meta_signature(job, bits=64)
     return (sim << 64) | meta
+
 
 def hamming_normalized_distance(a: Job, b: Job) -> float:
     """
@@ -324,14 +323,15 @@ def hamming_normalized_distance(a: Job, b: Job) -> float:
     bits = 64
     return min(hamming_distance(sa, sb) / bits, 1.0)
 
+
 # -------------------------
 # Geo utilities
 # -------------------------
 
 
-def geo_distance_km(loc1: Location3DField,
-                    loc2: Location3DField,
-                    earth_radius_m: float = 6_371_000.0) -> float:
+def geo_distance_km(
+    loc1: Location3DField, loc2: Location3DField, earth_radius_m: float = 6_371_000.0
+) -> float:
     if loc1.x == loc1.y == loc1.z == 0.0:
         loc1.compute_xyz(earth_radius_m)
     if loc2.x == loc2.y == loc2.z == 0.0:
@@ -340,7 +340,7 @@ def geo_distance_km(loc1: Location3DField,
     dx = loc1.x - loc2.x
     dy = loc1.y - loc2.y
     dz = loc1.z - loc2.z
-    return math.sqrt(dx*dx + dy*dy + dz*dz) / 1000.0
+    return math.sqrt(dx * dx + dy * dy + dz * dz) / 1000.0
 
 
 def location_bucket(job: Job) -> str:
@@ -385,7 +385,7 @@ def split_into_bands(simhash: int, bits: int = 64, bands: int = 8):
         band_bits = 0
         for i in range(r):
             if (simhash >> (b * r + i)) & 1:
-                band_bits |= (1 << i)
+                band_bits |= 1 << i
         yield b, band_bits
 
 
@@ -449,7 +449,7 @@ def build_clusters_with_lsh(
             else:
                 keys = [(band_idx, band_bits)]
 
-            for (b_idx, bits_val) in keys:
+            for b_idx, bits_val in keys:
                 bkey = hash_int(f"{b_idx}:{bits_val}", seed=999, bits=64)
                 buckets[bkey].append(job)
 

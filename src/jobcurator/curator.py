@@ -1,40 +1,30 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from random import seed
-from typing import Dict, List, Optional, Literal, Callable
 import math
+from dataclasses import dataclass
 from statistics import mean, pstdev
+from typing import Callable, Dict, List, Literal, Optional
 
-from .models import Job
+from .faiss_backends import faiss_cosine_distance, faiss_hash_clusters
 from .hash_utils import (
-    compute_token_length,
-    percentile,
-    length_score,
-    completion_score,
-    compute_quality,
-    build_exact_hash,
-    composite_signature,
-    hamming_distance,
     build_clusters_with_lsh,
+    build_exact_hash,
+    completion_score,
+    composite_signature,
+    compute_quality,
+    compute_token_length,
     hamming_normalized_distance,
+    length_score,
+    percentile,
 )
-
-from .minhash_backends import (
-    minhash_hash_clusters, 
-    minhash_jaccard_distance
-)
-
+from .minhash_backends import minhash_hash_clusters, minhash_jaccard_distance
+from .models import Job
 from .sklearn_backends import (
-    sklearn_hash_clusters,
     filter_outliers,
     sklearn_cosine_distance,
+    sklearn_hash_clusters,
 )
 
-from .faiss_backends import (
-    faiss_cosine_distance, 
-    faiss_hash_clusters
-)
 
 @dataclass
 class JobCurator:
@@ -146,7 +136,7 @@ class JobCurator:
         Used by "default_hash" and "minhash_hash".
         Ignored by "sklearn_hash" and "faiss_hash".
 
-    
+
     For incremental SQL / local-file usage.
     ---------------------------------------------
 
@@ -161,7 +151,9 @@ class JobCurator:
     ratio: float = 1.0
     alpha: float = 0.6
     max_per_cluster_in_pool: int = 3
-    backend: Literal["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"] = "default_hash"
+    backend: Literal["default_hash", "minhash_hash", "sklearn_hash", "faiss_hash"] = (
+        "default_hash"
+    )
     use_outlier_filter: bool = False
     outlier_contamination: float = 0.05
 
@@ -174,8 +166,8 @@ class JobCurator:
     use_multiprobe: bool = False
     max_multiprobe_flips: int = 1
 
-    jobs : List[Job] = None # all processed jobs after quality computation(in memory)
-    selected_jobs : List[Job] = None # selected jobs after dedupe_and_compress
+    jobs: List[Job] = None  # all processed jobs after quality computation(in memory)
+    selected_jobs: List[Job] = None  # selected jobs after dedupe_and_compress
 
     # --- seen-filter helpers (keep inside the curator) ---
     @staticmethod
@@ -231,16 +223,15 @@ class JobCurator:
 
         if self.backend == "minhash_hash":
             return minhash_jaccard_distance(a, b)
-        
+
         elif self.backend == "sklearn_hash":
             return sklearn_cosine_distance(a, b)
 
         elif self.backend == "faiss_hash":
-           return faiss_cosine_distance(a, b)
+            return faiss_cosine_distance(a, b)
 
         # fallback: treat as identical
         return 0.0
-
 
     def recompute_diversity_scores(
         self,
@@ -248,12 +239,12 @@ class JobCurator:
         alpha: float,
         distance_fn: Callable[[Job, Job], float],
         *,
-        k_nn: int = 3,            # use average of k nearest neighbors (softer than min)
-        q_lo: float = 0.10,       # robust scaling lower percentile
-        q_hi: float = 0.90,       # robust scaling upper percentile
-        tau: float = 0.15,        # temperature for optional soft-min (smaller = closer to hard min)
+        k_nn: int = 3,  # use average of k nearest neighbors (softer than min)
+        q_lo: float = 0.10,  # robust scaling lower percentile
+        q_hi: float = 0.90,  # robust scaling upper percentile
+        tau: float = 0.15,  # temperature for optional soft-min (smaller = closer to hard min)
         label_eps: float = 0.02,  # label smoothing to avoid exact 0/1
-        use_softmin: bool = False # set True to use soft-min instead of k-NN mean
+        use_softmin: bool = False,  # set True to use soft-min instead of k-NN mean
     ) -> List[Job]:
         """
         Softer, robust diversity recompute:
@@ -275,12 +266,14 @@ class JobCurator:
             return [j]
 
         # 1) Build symmetric distance matrix D (clamped to [0,1])
-        D = [[0.0]*n for _ in range(n)]
+        D = [[0.0] * n for _ in range(n)]
         for i in range(n):
-            for k in range(i+1, n):
+            for k in range(i + 1, n):
                 d = float(distance_fn(selected_jobs[i], selected_jobs[k]))
-                if d < 0.0: d = 0.0
-                if d > 1.0: d = 1.0
+                if d < 0.0:
+                    d = 0.0
+                if d > 1.0:
+                    d = 1.0
                 D[i][k] = d
                 D[k][i] = d
 
@@ -294,7 +287,7 @@ class JobCurator:
                 # soft-min: sum_j w_j * d_j with w ∝ exp(-d_j/tau)
                 ws = [math.exp(-x / max(tau, 1e-6)) for x in row]
                 s = sum(ws)
-                return sum(w*x for w, x in zip(ws, row)) / s if s > 0 else row[0]
+                return sum(w * x for w, x in zip(ws, row)) / s if s > 0 else row[0]
             else:
                 kk = min(k_nn, len(row))
                 return sum(row[:kk]) / kk
@@ -303,7 +296,7 @@ class JobCurator:
         raw_local = [local_div(i) for i in range(n)]
 
         # robust scaling via quantiles
-            
+
         lo = self._quantile(raw_local, q_lo)
         hi = self._quantile(raw_local, q_hi)
         span = max(hi - lo, 1e-6)
@@ -334,30 +327,43 @@ class JobCurator:
                     if use_softmin:
                         ws = [math.exp(-x / max(tau, 1e-6)) for x in neighbors]
                         s = sum(ws)
-                        v = sum(w*x for w, x in zip(ws, neighbors)) / s if s > 0 else neighbors[0]
+                        v = (
+                            sum(w * x for w, x in zip(ws, neighbors)) / s
+                            if s > 0
+                            else neighbors[0]
+                        )
                     else:
                         kk = min(k_nn, len(neighbors))
                         v = sum(neighbors[:kk]) / kk
                     loc_wo_i.append(v)
 
                 # robust-scale the temporary set like above
-                lo2 = self._quantile(loc_wo_i, q_lo); hi2 = self._quantile(loc_wo_i, q_hi)
+                lo2 = self._quantile(loc_wo_i, q_lo)
+                hi2 = self._quantile(loc_wo_i, q_hi)
                 span2 = max(hi2 - lo2, 1e-6)
                 loc_wo_i_scaled = [(x - lo2) / span2 for x in loc_wo_i]
                 loc_wo_i_scaled = [min(max(x, 0.0), 1.0) for x in loc_wo_i]
 
-                mean_wo_i = sum(loc_wo_i_scaled) / len(loc_wo_i_scaled) if loc_wo_i_scaled else 0.0
+                mean_wo_i = (
+                    sum(loc_wo_i_scaled) / len(loc_wo_i_scaled)
+                    if loc_wo_i_scaled
+                    else 0.0
+                )
                 drop = max(base_mean - mean_wo_i, 0.0)  # non-negative contribution
                 loo_contrib.append(drop)
 
             # robust scale contributions
-            lo_c = self._quantile(loo_contrib, q_lo); hi_c = self._quantile(loo_contrib, q_hi)
+            lo_c = self._quantile(loo_contrib, q_lo)
+            hi_c = self._quantile(loo_contrib, q_hi)
             span_c = max(hi_c - lo_c, 1e-6)
             loo_scaled = [(x - lo_c) / span_c for x in loo_contrib]
             loo_scaled = [min(max(x, 0.0), 1.0) for x in loo_scaled]
 
         # 4) Combine signals + label smoothing
-        final_div = [min(max(0.5*a + 0.5*b, label_eps), 1.0 - label_eps) for a, b in zip(local_scaled, loo_scaled)]
+        final_div = [
+            min(max(0.5 * a + 0.5 * b, label_eps), 1.0 - label_eps)
+            for a, b in zip(local_scaled, loo_scaled)
+        ]
 
         # write back
         for j, d in zip(selected_jobs, final_div):
@@ -366,7 +372,6 @@ class JobCurator:
             j.selection_score = alpha * q + (1.0 - alpha) * d
 
         return selected_jobs
-
 
     def dedupe_and_compress(
         self,
@@ -434,12 +439,21 @@ class JobCurator:
         # -------- exact dedup --------
         seen_exact: Dict[object, Job] = {}
         for j in jobs:
-            h = j.exact_hash 
+            h = j.exact_hash
 
             prev_j = seen_exact.get(h)
             # skip duplicate exact hashes, keep the first / highest quality (we sort clusters later)
-            if prev_j is None or (j.quality, j.length_tokens, j.completion_score_val, str(j.id)) > \
-                            (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val, str(prev_j.id)):
+            if prev_j is None or (
+                j.quality,
+                j.length_tokens,
+                j.completion_score_val,
+                str(j.id),
+            ) > (
+                prev_j.quality,
+                prev_j.length_tokens,
+                prev_j.completion_score_val,
+                str(prev_j.id),
+            ):
                 seen_exact[h] = j
 
         unique_jobs: List[Job] = list(seen_exact.values())
@@ -458,8 +472,8 @@ class JobCurator:
         elif self.backend == "minhash_hash":
             clusters = minhash_hash_clusters(
                 unique_jobs,
-                num_perm=64,               # number of MinHash permutations (signature length)
-                bands=8,                   # number of LSH bands
+                num_perm=64,  # number of MinHash permutations (signature length)
+                bands=8,  # number of LSH bands
                 jaccard_threshold=self.jaccard_threshold,
                 max_cluster_distance_km=self.max_cluster_distance_km,
                 use_multiprobe=self.use_multiprobe,
@@ -492,21 +506,24 @@ class JobCurator:
                 pool_jobs.extend(C[: self.max_per_cluster_in_pool])
 
         # dedupe by canonical_id in pool
-        
+
         by_key = {}
         for j in pool_jobs:
             key = j.canonical_id
             prev_j = by_key.get(key)
-            if prev_j is None or (j.quality, j.length_tokens, j.completion_score_val) > \
-                            (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val):
+            if prev_j is None or (
+                j.quality,
+                j.length_tokens,
+                j.completion_score_val,
+            ) > (prev_j.quality, prev_j.length_tokens, prev_j.completion_score_val):
                 by_key[key] = j
         pool_jobs = list(by_key.values())
-        
+
         if not pool_jobs:
             return []
 
         # -------- determine K on the actual pool_jobs --------
-        K = max(1, math.ceil(len(pool_jobs) * r)) # number of items to select
+        K = max(1, math.ceil(len(pool_jobs) * r))  # number of items to select
         if K >= len(pool_jobs):
             selected_jobs = sorted(pool_jobs, key=lambda j: j.quality, reverse=True)
             # update seen_filter before returning
@@ -516,13 +533,19 @@ class JobCurator:
             return selected_jobs
 
         # -------- diversity-aware greedy selection --------
-        alpha = min(max(self.alpha, 0.0), 1.0) # clamp alpha to [0,1] to avoid surprises
+        alpha = min(
+            max(self.alpha, 0.0), 1.0
+        )  # clamp alpha to [0,1] to avoid surprises
         pool_jobs.sort(key=lambda j: j.quality, reverse=True)
-        seed_job = pool_jobs.pop(0) # best quality job as seed and remove from pool
+        seed_job = pool_jobs.pop(0)  # best quality job as seed and remove from pool
         seed_job.diversity_score = 1.0  # better in the case of robust scaling than 0.5
-        seed_job.selection_score = alpha * seed_job.quality + (1.0 - alpha) * seed_job.diversity_score
+        seed_job.selection_score = (
+            alpha * seed_job.quality + (1.0 - alpha) * seed_job.diversity_score
+        )
 
-        selected_jobs: List[Job] = [seed_job]  # seed selected_jobs with best quality and remove it from pool_jobs (already sorted desc)
+        selected_jobs: List[Job] = [
+            seed_job
+        ]  # seed selected_jobs with best quality and remove it from pool_jobs (already sorted desc)
 
         while len(selected_jobs) < K and pool_jobs:
             # compute min diversity distance to any selected_jobs
@@ -544,22 +567,22 @@ class JobCurator:
             # optional label smoothing to avoid exact 0/1
             eps = 0.02
 
-            best_j_ = None
+            best_j = None
             best_score = -1.0
             for j, d in dmins:
-                z = (d - lo) / span            # robust-scaled
+                z = (d - lo) / span  # robust-scaled
                 z = 0.0 if z < 0.0 else (1.0 if z > 1.0 else z)
-                z = eps + (1.0 - 2.0*eps) * z  # smooth to (eps, 1-eps)
+                z = eps + (1.0 - 2.0 * eps) * z  # smooth to (eps, 1-eps)
                 j.diversity_score = z
                 j.selection_score = alpha * j.quality + (1.0 - alpha) * z
                 if j.selection_score > best_score:
                     best_score = j.selection_score
                     best_j = j
-                
+
             # safety: best_j should exist since pool not empty
             selected_jobs.append(best_j)
             pool_jobs.remove(best_j)
-        
+
         # top-up if needed
         if len(selected_jobs) < K and pool_jobs:
             pool_jobs.sort(key=lambda j: j.quality, reverse=True)
@@ -567,16 +590,20 @@ class JobCurator:
 
         # final recompute diversity properly on the FINAL selected set
         if greedy_diversity:
-           self.recompute_diversity_scores(selected_jobs, alpha=self.alpha, distance_fn=self._diversity_distance)
+            self.recompute_diversity_scores(
+                selected_jobs, alpha=self.alpha, distance_fn=self._diversity_distance
+            )
 
         # -------- update seen_filter with kept items --------
         if seen_filter is not None:
             for j in selected_jobs:
                 self._seen_add(seen_filter, j.exact_hash or build_exact_hash(j))
 
-        self.selected_jobs = sorted(selected_jobs, key=lambda j: j.selection_score, reverse=True)
+        self.selected_jobs = sorted(
+            selected_jobs, key=lambda j: j.selection_score, reverse=True
+        )
         return self.selected_jobs
-    
+
     @staticmethod
     def compute_job_stats(jobs: List[Job]) -> dict:
         """
@@ -601,21 +628,21 @@ class JobCurator:
             "quality_std": float(pstdev(qualities)) if len(qualities) > 1 else 0.0,
             "count": len(jobs),
         }
-    
+
     def print_compression_summary(self, n_preview: int = 0, t_ms: float = 0.0) -> None:
         total_jobs = len(getattr(self, "jobs", []) or [])
-        selected   = getattr(self, "selected_jobs", []) or []
+        selected = getattr(self, "selected_jobs", []) or []
         kept = len(selected)
         keep_ratio = (kept / total_jobs) if total_jobs else 0.0
 
         line = f" 🔎 preview: {n_preview} | 🎯 ratio: {keep_ratio:.2f} | 🧠 backend: {self.backend} | ⏱️  time: {t_ms:.1f} ms "
-        print("┌" + "─"*(len(line) + 2) + "┐")
+        print("┌" + "─" * (len(line) + 2) + "┐")
         print("│" + line + "│")
-        print("└" + "─"*(len(line) + 2) + "┘")
+        print("└" + "─" * (len(line) + 2) + "┘")
         print("")
 
         total_stats = self.compute_job_stats(self.jobs)
-        comp_stats  = self.compute_job_stats(selected)
+        comp_stats = self.compute_job_stats(selected)
 
         # --- Stdlib table ---
         def fmt(st):
@@ -635,18 +662,23 @@ class JobCurator:
         ]
 
         col_widths = [max(len(str(x)) for x in col) for col in zip(headers, *rows)]
-        def line(fill="-"):
+
+        def fill_line(fill="-"):
             return "+" + "+".join(fill * (w + 2) for w in col_widths) + "+"
 
         def fmt_row(vals):
-            return "| " + " | ".join(str(v).rjust(w) for v, w in zip(vals, col_widths)) + " |"
+            return (
+                "| "
+                + " | ".join(str(v).rjust(w) for v, w in zip(vals, col_widths))
+                + " |"
+            )
 
-        print(line("-"))
+        print(fill_line("-"))
         print(fmt_row(headers))
-        print(line("="))
+        print(fill_line("="))
         for r in rows:
             print(fmt_row(r))
-        print(line("-"))
+        print(fill_line("-"))
 
     @staticmethod
     def print_jobs_summary(jobs, n_preview=10, label="jobs set"):
@@ -654,7 +686,9 @@ class JobCurator:
         rows = []
         for j in jobs[:n_show]:
             city = getattr(getattr(j, "location", None), "city", None) or "Unknown"
-            h_str = (j.canonical_hash(4) if hasattr(j, "canonical_hash") else None) or "NA"
+            h_str = (
+                j.canonical_hash(4) if hasattr(j, "canonical_hash") else None
+            ) or "NA"
             q = getattr(j, "quality", None)
             d = getattr(j, "diversity_score", None)
             s = getattr(j, "selection_score", None)
@@ -669,20 +703,23 @@ class JobCurator:
         data = [headers] + rows
         widths = [max(len(str(x)) for x in col) for col in zip(*data)]
 
-        def line(ch="-", cross="+"):
+        def fill_line(ch="-", cross="+"):
             return cross + cross.join(ch * (w + 2) for w in widths) + cross
 
         def fmt_row(vals):
-            return "| " + " | ".join(str(v).ljust(w) if i in (0,1,2,6)
-                                    else str(v).rjust(w)
-                                    for i,(v,w) in enumerate(zip(vals, widths))) + " |"
+            return (
+                "| "
+                + " | ".join(
+                    str(v).ljust(w) if i in (0, 1, 2, 6) else str(v).rjust(w)
+                    for i, (v, w) in enumerate(zip(vals, widths))
+                )
+                + " |"
+            )
 
         print(f"\n=== Top {n_show} jobs from {label} ===")
-        print(line("-"))
+        print(fill_line("-"))
         print(fmt_row(headers))
-        print(line("="))
+        print(fill_line("="))
         for r in rows:
             print(fmt_row(r))
-        print(line("-"))
-
-
+        print(fill_line("-"))

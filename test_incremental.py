@@ -16,20 +16,22 @@ import random
 from datetime import datetime, timedelta
 from typing import List
 
-from jobcurator import Job, Category, Location3DField, SalaryField, JobCurator
+from jobcurator import Category, Job, JobCurator, Location3DField, SalaryField
 from jobcurator.storage import (
     LocalFileStoreDB,
     SqlStoreDB,
-    process_batch,
     global_reselect_in_store,
+    process_batch,
 )
-
 
 # ---------------------------------------------------------------------------
 # Synthetic job generator (for demo purposes)
 # ---------------------------------------------------------------------------
 
-def make_dummy_job(job_id: str, city: str, country: str, lat: float, lon: float, idx: int) -> Job:
+
+def make_dummy_job(
+    job_id: str, city: str, country: str, lat: float, lon: float, idx: int
+) -> Job:
     """
     Create a synthetic Job with minimal realistic fields.
     The dedup/compression logic only strictly needs: id, quality, signature
@@ -133,8 +135,11 @@ def make_batch(batch_idx: int, n_per_batch: int) -> List[Job]:
 # Main CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Test incremental JobCurator pipeline.")
+    parser = argparse.ArgumentParser(
+        description="Test incremental JobCurator pipeline."
+    )
     parser.add_argument(
         "--backend",
         type=str,
@@ -196,7 +201,10 @@ def main() -> None:
     # Choose storage
     # -----------------------------------------------------------------------
     if args.storage == "local":
-        from jobcurator.storage.local_store import DEFAULT_JOBS_PATH, DEFAULT_CUCKOO_PATH
+        from jobcurator.storage.local_store import (
+            DEFAULT_CUCKOO_PATH,
+            DEFAULT_JOBS_PATH,
+        )
 
         if args.clear_local:
             for path in (DEFAULT_JOBS_PATH, DEFAULT_CUCKOO_PATH):
@@ -215,7 +223,7 @@ def main() -> None:
             )
 
         try:
-            import psycopg2 # type: ignore # user is responsible for installing psycopg2
+            import psycopg2  # type: ignore # user is responsible for installing psycopg2
 
         except ImportError as e:  # pragma: no cover
             raise RuntimeError(
@@ -225,7 +233,6 @@ def main() -> None:
         conn = psycopg2.connect(args.dsn)
         store = SqlStoreDB(conn)
         print("[info] Using SqlStoreDB with DSN:", args.dsn)
-
 
     # -----------------------------------------------------------------------
     # Configure JobCurator

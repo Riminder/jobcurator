@@ -2,7 +2,14 @@ import argparse
 from datetime import datetime
 from time import perf_counter
 
-from jobcurator import JobCurator, Job, Category, SalaryField, Location3DField, CuckooFilter, curator
+from jobcurator import (
+    Category,
+    CuckooFilter,
+    Job,
+    JobCurator,
+    Location3DField,
+    SalaryField,
+)
 
 
 def build_jobs():
@@ -329,7 +336,6 @@ def main():
     )
 
     # Dedupe & Compress
-    from time import perf_counter
     t0 = perf_counter()
     compressed = curator.dedupe_and_compress(jobs, seen_filter=seen_filter)
     t_ms = (perf_counter() - t0) * 1000.0  # milliseconds
@@ -337,7 +343,9 @@ def main():
     # Print compression summary statistics
     curator.print_compression_summary(n_preview=n_preview, t_ms=t_ms)
     curator.print_jobs_summary(curator.jobs, n_preview=n_preview, label="All jobs set")
-    curator.print_jobs_summary(compressed, n_preview=n_preview, label="compressed jobs set")
+    curator.print_jobs_summary(
+        compressed, n_preview=n_preview, label="compressed jobs set"
+    )
 
 
 if __name__ == "__main__":

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from typing import Dict, List
 from collections import defaultdict
+from typing import Dict, List
 
-from .models import Job
 from .hash_utils import flatten_category_tokens
-
-
+from .models import Job
 
 _HAS_FAISS = True
 try:
-    import numpy as np # type: ignore
     import faiss  # type: ignore
+    import numpy as np  # type: ignore
 except ImportError:  # pragma: no cover
     _HAS_FAISS = False
 
@@ -66,23 +64,31 @@ def build_faiss_vector(job: Job, dim_sig: int = 128) -> np.ndarray:
 
     return np.concatenate([sig_vec, loc_vec, cat_vec], axis=0)
 
+
 def _vec(job) -> np.ndarray:
     """float32, contiguous 1D array from stored list."""
     v = np.asarray(job.faiss_hashvector, dtype=np.float32)
     return np.ascontiguousarray(v)
 
+
 # Distances
-def l2sq(a, b) -> float:           # squared L2 (same metric FAISS IndexFlatL2 uses)
+def l2sq(a, b) -> float:  # squared L2 (same metric FAISS IndexFlatL2 uses)
     va, vb = _vec(a), _vec(b)
     d = va - vb
     return float(np.dot(d, d))
 
-def faiss_cosine_distance(a, b) -> float:    # cosine distance in [0, 2] (≈[0,1] if nonnegative)
+
+def faiss_cosine_distance(
+    a, b
+) -> float:  # cosine distance in [0, 2] (≈[0,1] if nonnegative)
     va, vb = _vec(a), _vec(b)
-    na = np.linalg.norm(va); nb = np.linalg.norm(vb)
-    if na == 0.0 or nb == 0.0: return 1.0
+    na = np.linalg.norm(va)
+    nb = np.linalg.norm(vb)
+    if na == 0.0 or nb == 0.0:
+        return 1.0
     sim = float(np.dot(va, vb) / (na * nb))
     return 1.0 - max(min(sim, 1.0), -1.0)
+
 
 def faiss_hash_clusters(
     jobs: List[Job],

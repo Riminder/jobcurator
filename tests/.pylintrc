@@ -1,0 +1,17 @@
+[MASTER]
+ignore=venv,build,dist
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-function-docstring,
+    too-many-instance-attributes,
+    too-many-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    duplicate-code,
+    unused-argument
+
+[FORMAT]
+max-line-length=100

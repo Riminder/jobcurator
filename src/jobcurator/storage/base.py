@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Protocol, Set
 
-from jobcurator import JobCurator, CuckooFilter, Job
+from jobcurator import CuckooFilter, Job, JobCurator
 from jobcurator.hash_utils import hamming_distance
 
 
@@ -17,6 +17,7 @@ class LightJob:
       - quality
       - signature
     """
+
     id: str
     quality: float
     signature: int
@@ -96,6 +97,7 @@ def global_reselect(
         return list(jobs_meta)
 
     import math
+
     N_original = len(jobs_meta)
     K = math.ceil(N_original * ratio)
 
@@ -112,9 +114,7 @@ def global_reselect(
     while len(selected) < K and pool:
         dmins = []
         for x in pool:
-            dmin = min(
-                hamming_distance(x.signature, s.signature) for s in selected
-            )
+            dmin = min(hamming_distance(x.signature, s.signature) for s in selected)
             dmins.append((x, dmin))
 
         dvals = [d for _, d in dmins]
