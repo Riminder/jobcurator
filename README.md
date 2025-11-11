@@ -3,13 +3,15 @@
        style="width:100%; height:auto; object-fit:cover; object-position:center 50%;" />
 </div>
 
-[![Pypi](https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml/badge.svg)](https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml)
-[![CI](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml)
-[![Audit](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql)
-[![Secuirty](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml/badge.svg)](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Docs](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment)
-
+<p align="center">
+  <a href="https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml"><img src="https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml/badge.svg" alt="PyPI Publish"></a>
+  <a href="https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml"><img src="https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml/badge.svg?branch=master" alt="Lint & CI"></a>
+  <a href="https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml"><img src="https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml/badge.svg?branch=master" alt="CodeQL Security Scan"></a>
+  <a href="https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment"><img src="https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment/badge.svg?branch=master" alt="Docs Deployment"></a>
+  <a href="https://pypi.org/project/jobcurator/"><img src="https://img.shields.io/pypi/v/jobcurator.svg" alt="PyPI Version"></a>
+  <a href="https://pypi.org/project/jobcurator/"><img src="https://img.shields.io/pypi/pyversions/jobcurator.svg" alt="Python Versions"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License"></a>
+</p>
 
 
 # 🤗 Welcome to the jobcurator library

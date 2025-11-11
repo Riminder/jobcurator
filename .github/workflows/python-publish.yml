@@ -4,7 +4,7 @@ name: Upload Python Package
 on:
   push:
     tags:
-      - "v*.*.*"    # runs when bump job pushes a version tag #git tag v1.2.3 && git push origin v1.2.3
+      - "v*.*.*"    # runs when bump job pushes a version tag #git tag v1.2.4 && git push origin v1.2.4
   # Optional: allow publishing from Release UI too
   release:
     types: [published]
