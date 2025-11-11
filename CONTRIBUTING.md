@@ -9,6 +9,7 @@
   - [Code Style & Guidelines](#-code-style--guidelines)
   - [Public API & Backward Compatibility](#-public-api--backward-compatibility)
   - [Pull Requests](#-pull-requests)
+  - [Publishing to PyPI](#-publishing-to-pypi-maintainers-only)
 
 ## 🤝 Contributing
 
@@ -76,18 +77,25 @@ When opening a feature request:
 
 Before submitting a PR:
 
-1. Add or update tests (e.g. under `tests/`):
+1. Add / update tests (in `tests/`)
+   - Edge cases: empty sets, single job, all duplicates, all unique.
+   - Realistic cases: mixed sources, mixed geography, different compression ratios.
+2. Run tests locally:
+   ```bash
+   python3 test.py
+   ```
 
-   * Edge cases: empty input, single job, all duplicates, all unique.
-   * Typical cases: mixed locations, mixed sources, various compression ratios.
-2. Run the test suite:
+3. Ensure lint + formatting:
 
    ```bash
-   pytest
+   pylint $(git ls-files '*.py')
+   black .
+   autoflake --in-place --remove-all-unused-imports -r .
    ```
-3. Ensure all tests pass.
 
-If your change touches deduplication, scoring, clustering, or selection logic, please add specific tests to cover the change and avoid regressions.
+All tests + lint + formatting must pass before requesting review.
+
+> If your changes touch deduplication, hashing, scoring, selection, or diversity logic — **you must provide targeted tests** validating the new expected behavior and preventing regressions.
 
 ---
 
@@ -157,5 +165,36 @@ When changing their behavior or signatures:
    * Tests added or updated
 
 PRs that are **small, focused, and well-tested** are more likely to be reviewed and merged quickly.
+
+ok here is a merged + shortened version (add this bottom section to the same CONTRIBUTING.md you pasted — this is the last section):
+
+---
+
+### 🚀 Publishing to PyPI (Maintainers Only)
+
+Publishing is **fully automated** via GitHub Actions using *Trusted Publishing* (OIDC).
+
+We do **not** publish manually with tokens.
+
+**To release a new version:**
+1. Make sure `main` is clean + tests pass
+2. Bump version (either commit the version change or if using scm just tag)
+3. Push a SemVer tag:
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+That’s it ✅
+
+This triggers `.github/workflows/python-publish.yml` which:
+
+* checks out the tag
+* builds the wheel + sdist
+* uploads automatically to PyPI
+
+> IMPORTANT: PyPI will reject duplicates — always bump version before tagging.
+
+If tests + lint pass → tag + push → automatically publishes.
 
 ---
