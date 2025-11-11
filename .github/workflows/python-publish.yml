@@ -6,6 +6,7 @@ on:
   push:
     tags:
       - "v*.*.*"        # fired by your bump job pushing tags from master
+      - "vjobcurator-*.*.*"  # optional: match your custom versioning scheme
   release:
     types: [published]  # optional: still publish when you cut a Release
 
