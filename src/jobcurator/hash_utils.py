@@ -124,8 +124,7 @@ class CuckooFilter:
             victim_pos = hash_int(str(cur_fp), seed=999, bits=64) % self.bucket_size
             if victim_pos >= len(self.buckets[idx]):
                 victim_pos = len(self.buckets[idx]) - 1
-            if victim_pos < 0:
-                victim_pos = 0
+            victim_pos = max(victim_pos, 0)
 
             self.buckets[idx][victim_pos], cur_fp = (
                 cur_fp,

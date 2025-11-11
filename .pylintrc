@@ -13,7 +13,6 @@ disable=
     duplicate-code,
     unused-argument,
     line-too-long,
-    bad-continuation,
     import-outside-toplevel,
     invalid-name
 

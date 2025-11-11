@@ -266,10 +266,7 @@ class JobCurator:
         for i in range(n):
             for k in range(i + 1, n):
                 d = float(distance_fn(selected_jobs[i], selected_jobs[k]))
-                if d < 0.0:
-                    d = 0.0
-                if d > 1.0:
-                    d = 1.0
+                d = min(max(d, 0.0), 1.0)
                 D[i][k] = d
                 D[k][i] = d
 
