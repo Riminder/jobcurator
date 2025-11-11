@@ -1,17 +1,14 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools-scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "jobcurator"
-version = 1.0.0
 description = "Open-source Machine Learning Library for Job Data"
-authors = [
-  { name = "Mouhidine SEIV", email = "mouhidine.seiv@hrflow.ai" }
-]
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
+authors = [{ name = "Mouhidine SEIV", email = "mouhidine.seiv@hrflow.ai" }]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.8",
@@ -21,18 +18,19 @@ classifiers = [
   "Intended Audience :: Developers",
   "Topic :: Software Development :: Libraries",
 ]
+# Let setuptools_scm generate the version from your Git tags
+dynamic = ["version"]
 
 [project.urls]
-Homepage = "https://github.com/riminder/jobcurator"
+Homepage = "https://github.com/Riminder/jobcurator"
+Repository = "https://github.com/Riminder/jobcurator"
+Issues = "https://github.com/Riminder/jobcurator/issues"
 
-
+# If you use a src/ layout, keep this (otherwise remove and rely on auto-discovery)
 [tool.setuptools]
 package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["jobcurator*"]
+packages = { find = { where = ["src"] } }
 
 [tool.setuptools_scm]
-version_scheme = "release-branch-semver"
+# Optional: strip local version, use PEP440 versions from tags like v1.2.3
 local_scheme = "no-local-version"
