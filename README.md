@@ -7,8 +7,8 @@
 [![CI](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml)
 [![Audit](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql)
 [![Secuirty](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml/badge.svg)](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Docs](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment)
-[![License: MIT](https://img.shields.io/badge/License-MIT.svg?style=for-the-badge)](LICENSE)
 
 
 
