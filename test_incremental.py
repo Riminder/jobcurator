@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# pylint: disable=line-too-long
+
 """
 test_incremental.py
 

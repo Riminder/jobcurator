@@ -221,7 +221,7 @@ class JobCurator:
         if self.backend == "default_hash":
             return hamming_normalized_distance(a, b)
 
-        if self.backend == "minhash_hash":
+        elif self.backend == "minhash_hash":
             return minhash_jaccard_distance(a, b)
 
         elif self.backend == "sklearn_hash":
@@ -288,9 +288,8 @@ class JobCurator:
                 ws = [math.exp(-x / max(tau, 1e-6)) for x in row]
                 s = sum(ws)
                 return sum(w * x for w, x in zip(ws, row)) / s if s > 0 else row[0]
-            else:
-                kk = min(k_nn, len(row))
-                return sum(row[:kk]) / kk
+            kk = min(k_nn, len(row))
+            return sum(row[:kk]) / kk
 
         # 2) Per-item soft/avg-kNN diversity
         raw_local = [local_div(i) for i in range(n)]
@@ -318,8 +317,8 @@ class JobCurator:
                 for u in range(n):
                     if u == i:
                         continue
-                    # neighbors of u excluding {u,i}
-                    neighbors = [D[u][v] for v in range(n) if v != u and v != i]
+                    # neighbors of u excluding {u,i} / v != u and v != i
+                    neighbors = [D[u][v] for v in range(n) if v not in (u, i)]
                     if not neighbors:
                         loc_wo_i.append(0.0)
                         continue
@@ -380,7 +379,7 @@ class JobCurator:
         *,
         greedy_diversity: bool = False,
         seen_filter=None,
-    ) -> List[Job]:
+    ) -> List[Job]: # pylint: disable=too-many-return-statements
         """
         Deduplicate + cluster + compress with diversity-aware greedy selection.
         Uses an optional seen_filter (Bloom/Cuckoo/set) to skip already-seen jobs
@@ -635,7 +634,7 @@ class JobCurator:
         kept = len(selected)
         keep_ratio = (kept / total_jobs) if total_jobs else 0.0
 
-        line = f" 🔎 preview: {n_preview} | 🎯 ratio: {keep_ratio:.2f} | 🧠 backend: {self.backend} | ⏱️  time: {t_ms:.1f} ms "
+        line = f" 🔎 preview: {n_preview} | 🎯 ratio: {keep_ratio:.2f} | 🧠 backend: {self.backend} | ⏱️  time: {t_ms:.1f} ms " # pylint: disable=line-too-long
         print("┌" + "─" * (len(line) + 2) + "┐")
         print("│" + line + "│")
         print("└" + "─" * (len(line) + 2) + "┘")

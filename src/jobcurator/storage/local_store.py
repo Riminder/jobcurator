@@ -59,7 +59,8 @@ class LocalFileStoreDB:
 
     # ----- Compressed jobs -----
 
-    def _job_to_record(self, j: Job, backend: str) -> dict:
+    @staticmethod
+    def _job_to_record(j: Job, backend: str) -> dict:
         """
         Convert a Job to JSON record.
 

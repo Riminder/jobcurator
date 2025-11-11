@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# pylint: disable=line-too-long
+
 import argparse
 from datetime import datetime
 from time import perf_counter

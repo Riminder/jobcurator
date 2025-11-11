@@ -135,6 +135,6 @@ class Job:
         else:
             s = str(h)
 
-        if maxlen and maxlen > 0 and len(s) > maxlen:
+        if maxlen and 0 < maxlen < len(s):
             return s[:maxlen] + "…"
         return s

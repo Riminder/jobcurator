@@ -292,7 +292,7 @@ def build_meta_signature(job: Job, bits: int = 64) -> int:
         values.append("coord:" + coord_str)
 
     if job.salary:
-        salary_str = f"{job.salary.min_value}-{job.salary.max_value}|{job.salary.currency}|{job.salary.period}"
+        salary_str = f"{job.salary.min_value}-{job.salary.max_value}|{job.salary.currency}|{job.salary.period}" # pylint: disable=line-too-long
         values.append("sal:" + salary_str)
 
     bitset = 0

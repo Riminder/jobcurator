@@ -55,8 +55,7 @@ class SqlStoreDB:
                 )
                 self.conn.commit()
                 return cf
-            else:
-                return pickle.loads(row[0])
+            return pickle.loads(row[0])
 
     def save_cuckoo(self, cf: CuckooFilter) -> None:
         blob = pickle.dumps(cf, protocol=pickle.HIGHEST_PROTOCOL)
