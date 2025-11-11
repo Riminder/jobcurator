@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jobcurator"
+version = 1.0.0
 description = "Open-source Machine Learning Library for Job Data"
 authors = [
   { name = "Mouhidine SEIV", email = "mouhidine.seiv@hrflow.ai" }
