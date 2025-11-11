@@ -92,7 +92,7 @@ def sklearn_hash_clusters(
     for i in range(n):
         xi = X[i]
         distances, indices = nn.radius_neighbors(xi, radius=eps, return_distance=True)
-        for d, j in zip(distances[0], indices[0]):
+        for _, j in zip(distances[0], indices[0]):
             if i == j:
                 continue
             union(i, j)
