@@ -1,0 +1,40 @@
+name: Bump version on master
+
+on:
+  push:
+    branches: [ master ]
+
+permissions:
+  contents: write   # to push tags & create releases
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next patch version from latest tag
+        id: ver
+        run: |
+          last="$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)"
+          base="${last#v}"
+          IFS='.' read -r MAJ MIN PAT <<< "$base"
+          echo "next=v$MAJ.$MIN.$((PAT+1))" >> $GITHUB_OUTPUT
+          echo "last=$last" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.ver.outputs.next }}" -m "Release ${{ steps.ver.outputs.next }}"
+          git push origin "${{ steps.ver.outputs.next }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.next }}
+          name: ${{ steps.ver.outputs.next }}
+          draft: false
+          prerelease: false

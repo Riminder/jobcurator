@@ -4,7 +4,6 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jobcurator"
-version = "0.9.0"
 description = "Open-source Machine Learning Library for Job Data"
 authors = [
   { name = "Mouhidine SEIV", email = "mouhidine.seiv@hrflow.ai" }
@@ -32,3 +31,7 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["jobcurator*"]
+
+[tool.setuptools_scm]
+version_scheme = "release-branch-semver"
+local_scheme = "no-local-version"

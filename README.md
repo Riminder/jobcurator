@@ -3,6 +3,11 @@
        style="width:100%; height:auto; object-fit:cover; object-position:center 50%;" />
 </div>
 
+[![Upload Python Package](https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml/badge.svg)](https://github.com/Riminder/jobcurator/actions/workflows/python-publish.yml)
+[![Pylint](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pylint.yml)
+[![CodeQL](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/github-code-scanning/codeql)
+[![CodeQL Advanced](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml/badge.svg)](https://github.com/Riminder/jobcurator/actions/workflows/codeql.yml)
+[![pages-build-deployment](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment/badge.svg?branch=master)](https://github.com/Riminder/jobcurator/actions/workflows/pages/pages-build-deployment)
 
 
 # 🤗 Welcome to the jobcurator library
