@@ -211,27 +211,23 @@ class JobCurator:
         return s[i] * (1.0 - frac) + s[j] * frac
 
     def _diversity_distance(self, a: Job, b: Job) -> float:
-        """
-        Return a distance in [0,1] depending on backend:
+        """Return a distance in [0,1] depending on backend:
         - default_hash: Hamming on 64-bit simhash/composite signature (int)
         - minhash_hash: 1 - Jaccard_estimate from MinHash signatures (tuple[int])
         - sklearn_hash: cosine distance on unit-normalized vectors (if available)
-        - faiss_hash:   L2 distance on vectors, normalized to [0,1] by a cap
+        - faiss_hash: L2 distance on vectors, normalized to [0,1] by a cap
         """
         if self.backend == "default_hash":
             return hamming_normalized_distance(a, b)
-
-        elif self.backend == "minhash_hash":
+        if self.backend == "minhash_hash":
             return minhash_jaccard_distance(a, b)
-
-        elif self.backend == "sklearn_hash":
+        if self.backend == "sklearn_hash":
             return sklearn_cosine_distance(a, b)
-
-        elif self.backend == "faiss_hash":
+        if self.backend == "faiss_hash":
             return faiss_cosine_distance(a, b)
-
         # fallback: treat as identical
         return 0.0
+
 
     def recompute_diversity_scores(
         self,
